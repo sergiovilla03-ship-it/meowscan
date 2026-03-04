@@ -46,12 +46,15 @@ CASCADES_URL = {
 }
 
 # ── Prompt para Groq Vision ───────────────────────────────────
-PROMPT_ES = """Eres un veterinario experto en felinos con 20 años de experiencia.
-Analiza esta imagen de un gato y responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones.
+PROMPT_ES = """Eres un veterinario experto en animales de compañía con 30 años de experiencia en gatos y perros.
+Analiza esta imagen y responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones.
+
+Primero determina si hay un gato o un perro en la imagen.
 
 El JSON debe tener exactamente esta estructura:
 {
-  "gato_detectado": true o false,
+  "mascota_detectada": true o false,
+  "tipo": "gato" o "perro",
   "raza": {
     "nombre": "nombre de la raza en español",
     "confianza": número del 0 al 100,
@@ -67,7 +70,7 @@ El JSON debe tener exactamente esta estructura:
   "color": {
     "color_principal": "nombre del color en español",
     "colores_secundarios": ["color1", "color2"],
-    "patron": "Sólido, Atigrado, Bicolor, Tricolor, Carey,點(spotted), Colorpoint u otro",
+    "patron": "Sólido, Atigrado, Bicolor, Tricolor, Carey, Manchado u otro",
     "hex_aproximado": "#xxxxxx"
   },
   "estado_corporal": {
@@ -84,6 +87,11 @@ El JSON debe tener exactamente esta estructura:
     "significado": "qué significa esta posición de orejas",
     "alerta": true o false
   },
+  "cola": {
+    "posicion": "Alta, Baja, Horizontal, Entre las patas, Moviéndose o No visible",
+    "significado": "qué significa esta posición de cola",
+    "visible": true o false
+  },
   "gesto": {
     "nombre": "nombre del estado de ánimo con emoji",
     "emocion": "Feliz, Relajado, Curioso, Alerta, Asustado, Enojado, Juguetón o Somnoliento",
@@ -98,7 +106,7 @@ El JSON debe tener exactamente esta estructura:
   }
 }
 
-Si no hay gato en la imagen, devuelve: {"gato_detectado": false}
+Si no hay gato ni perro en la imagen, devuelve: {"mascota_detectada": false}
 Responde SOLO el JSON, nada más."""
 
 
@@ -281,12 +289,13 @@ class MotorGroq:
         # Analizar con Groq Vision
         resultado = self.analizar_con_groq(img)
 
-        if not resultado.get("gato_detectado", False):
+        if not resultado.get("mascota_detectada", False):
             return {
-                "gato_detectado":   False,
-                "timestamp":        time.time(),
-                "caras_detectadas": len(caras),
-                "mensaje": "No se detectó un gato en la imagen. "
+                "mascota_detectada": False,
+                "gato_detectado":    False,
+                "timestamp":         time.time(),
+                "caras_detectadas":  len(caras),
+                "mensaje": "No se detectó un gato ni un perro. "
                            "Asegúrate de apuntar bien la cámara."
             }
 
@@ -306,7 +315,9 @@ class MotorGroq:
         salud_vis  = resultado.get("salud_visual", {})
 
         return {
-            "gato_detectado":   True,
+           "gato_detectado":   True,
+            "mascota_detectada": True,
+            "tipo": resultado.get("tipo", "gato"),
             "timestamp":        time.time(),
             "caras_detectadas": len(caras),
             "imagen_anotada":   img_b64,
@@ -364,6 +375,13 @@ class MotorGroq:
                 "estado":      orejas.get("estado", "-"),
                 "significado": orejas.get("significado", "-"),
                 "alerta":      orejas.get("alerta", False),
+            },
+
+	  # Cola
+            "cola": {
+                "posicion":   resultado.get("cola", {}).get("posicion", "No visible"),
+                "significado":resultado.get("cola", {}).get("significado", "-"),
+                "visible":    resultado.get("cola", {}).get("visible", False),
             },
 
             # Salud visual
