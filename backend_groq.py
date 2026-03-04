@@ -381,7 +381,8 @@ class MotorGroq:
 
 app   = FastAPI(title="MeowScan API v3 — Groq Vision", version="3.0")
 motor: Optional[MotorGroq] = None
-
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -396,6 +397,9 @@ async def startup():
     motor = MotorGroq()
     print("✅ Servidor listo!\n")
 
+@app.get("/perfil")
+def perfil():
+    return FileResponse("cat_profile.html")
 @app.get("/")
 def root():
     return {"status": "ok", "app": "MeowScan API", "version": "3.0", "ia": "Groq Vision"}
