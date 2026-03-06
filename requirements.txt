@@ -6,3 +6,4 @@ groq
 python-multipart
 requests
 scipy
+Pillow
