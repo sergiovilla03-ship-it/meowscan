@@ -1,7 +1,5 @@
 """
-🐱 MEOWSCAN v4.0 - BACKEND CON GROQ VISION IA + OPENCV REAL
-Nuevo: Respiración con detección real de movimiento + Optical Flow para espasmos
-Requiere: pip install scipy
+🐱 MEOWSCAN v3.1 - BACKEND CON GROQ VISION IA
 ════════════════════════════════════════════════════════════════
 FastAPI + OpenCV + Groq Vision
 Análisis: raza, peso, color, orejas, mood, salud + vómito
@@ -15,13 +13,11 @@ import time
 import os
 import json
 import urllib.request
-import collections
-import threading
-from scipy.signal import find_peaks
 from io import BytesIO
 from typing import List, Dict, Any, Optional
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from PIL import Image
@@ -243,48 +239,160 @@ Responde SOLO el JSON."""
 # ════════════════════════════════════════════════════════════════
 #  PROMPT HISTORIA MÉDICA E IA PREDICTIVA
 # ════════════════════════════════════════════════════════════════
-PROMPT_HISTORIA = """Eres un veterinario especialista en medicina preventiva con 30 años de experiencia.
-Analiza el historial médico completo de esta mascota basado en todos sus escaneos anteriores y genera un reporte predictivo de salud.
+PROMPT_HISTORIA = """Eres el Dr. MeowScan, un veterinario clínico con 30 años de experiencia especializado en medicina felina y canina, diagnóstico preventivo y bienestar animal.
 
-DISCLAIMER IMPORTANTE: Este análisis es orientativo y de prevención temprana. Siempre consulta un veterinario certificado para diagnósticos definitivos.
+Tu misión es analizar TODOS los datos del historial médico de esta mascota y generar un diagnóstico clínico completo, profesional y útil para el dueño.
+
+INSTRUCCIONES CRÍTICAS:
+- Analiza CADA escaneo del historial individualmente y en conjunto
+- Busca PATRONES y TENDENCIAS a lo largo del tiempo
+- Identifica CAMBIOS entre escaneos (mejora, empeoramiento, estabilidad)
+- Cruza datos: color de ojos + pelaje + comportamiento + signos vitales
+- Actúa como el veterinario más experimentado del mundo
+- Sé específico, no genérico — menciona hallazgos concretos del historial
+- Si hay señales de alarma, dilo claramente con urgencia
+- Siempre recomienda visita al veterinario con nivel de urgencia específico
+
+DATOS QUE RECIBIRÁS POR ESCANEO:
+- Fecha del escaneo
+- Condición de ojos (color, opacidad, secreciones)
+- Condición del pelaje (brillo, textura, pérdida)
+- Signos vitales si disponibles (respiración, espasmos)
+- Alertas detectadas
+- Observaciones generales de la IA
+
+DISCLAIMER: Este análisis es orientativo y de prevención temprana. Siempre consulta un veterinario certificado para diagnósticos definitivos.
 
 Responde ÚNICAMENTE con JSON válido, sin texto adicional:
 {
-  "score_salud": número del 0 al 100,
-  "tendencia": "Mejorando, Estable, Deteriorando o Insuficientes datos",
+  "score_salud": número del 0 al 100 basado en todos los datos,
+  "tendencia": "Mejorando, Estable, Deteriorando o Datos insuficientes",
   "tendencia_color": "#52C97A para mejorando/estable, #FF9800 para deteriorando",
-  "resumen": "resumen ejecutivo del estado de salud en 2-3 oraciones",
+  "resumen_clinico": "párrafo de 3-4 oraciones describiendo el estado clínico real basado en los datos encontrados. Menciona hallazgos específicos.",
+  "diagnostico_preliminar": "diagnóstico clínico basado en los patrones encontrados, mencionando las condiciones más probables",
   "alertas_activas": [
     {
-      "tipo": "nombre del problema",
-      "descripcion": "descripción breve",
+      "tipo": "nombre clínico del problema",
+      "descripcion": "descripción médica específica basada en los datos",
       "urgencia": "Baja, Media o Alta",
-      "recomendacion": "qué hacer"
+      "evidencia": "qué escaneos o datos respaldan esta alerta",
+      "recomendacion": "acción específica a tomar"
     }
   ],
   "predicciones": [
     {
       "condicion": "nombre de la condición",
       "probabilidad": "Baja, Media o Alta",
-      "plazo": "plazo estimado",
-      "prevencion": "cómo prevenirlo"
+      "plazo": "plazo estimado en meses",
+      "señales_detectadas": "qué señales del historial sugieren esto",
+      "prevencion": "protocolo preventivo específico"
     }
   ],
+  "evolucion_temporal": {
+    "primer_escaneo": "descripción del estado inicial",
+    "ultimo_escaneo": "descripción del estado más reciente",
+    "cambios_notables": "cambios significativos observados entre escaneos"
+  },
   "habitos_detectados": {
-    "peso": "tendencia de peso observada",
+    "ojos": "estado y tendencia ocular",
+    "pelaje": "estado y tendencia del pelaje",
     "actividad": "nivel de actividad observado",
-    "humor": "patrones de humor observados",
-    "salud_general": "observación general"
+    "salud_general": "evaluación clínica general"
   },
   "recomendaciones": [
-    "recomendación 1",
-    "recomendación 2",
-    "recomendación 3"
+    "recomendación clínica específica 1",
+    "recomendación clínica específica 2",
+    "recomendación clínica específica 3"
   ],
-  "proxima_revision": "cuándo debería ir al veterinario"
+  "visita_veterinario": {
+    "urgencia": "Inmediata, Esta semana, Este mes o Revisión rutinaria",
+    "urgencia_color": "#F44336 para inmediata, #FF9800 para esta semana, #52C97A para rutinaria",
+    "motivo": "razón clínica específica para la visita",
+    "estudios_sugeridos": ["examen 1", "examen 2"]
+  },
+  "proxima_revision": "fecha recomendada para próximo escaneo en MeowScan"
 }
 
 Responde SOLO el JSON."""
+
+# ════════════════════════════════════════════════════════════════
+#  PROMPT ENCÍAS
+# ════════════════════════════════════════════════════════════════
+PROMPT_ENCIAS = """Eres el Dr. MeowScan, veterinario clínico con 30 años de experiencia especializado en medicina felina y canina.
+
+Analiza esta imagen de la boca/encías de la mascota y evalúa su color y estado.
+
+ESCALA DE COLORES DE ENCÍAS:
+- Rosa brillante: NORMAL — buena perfusión y oxigenación
+- Rosa pálido: ALERTA — posible anemia, shock temprano
+- Blanco/muy pálido: EMERGENCIA — anemia severa, shock
+- Azul/morado (cianosis): EMERGENCIA CRÍTICA — falta de oxígeno, llamar al vet YA
+- Amarillo (ictericia): URGENTE — problemas hepáticos o biliares
+- Rojo intenso: ALERTA — infección, fiebre alta, toxicidad
+- Marrón/chocolate: EMERGENCIA — envenenamiento por paracetamol u otras toxinas
+
+TAMBIÉN EVALÚA:
+- Tiempo de llenado capilar (TLC): encía blanca vuelve a rosa en <2 seg = normal
+- Humedad: encías secas = deshidratación
+- Presencia de sarro o inflamación gingival
+- Úlceras o lesiones visibles
+
+Responde ÚNICAMENTE con JSON válido:
+{
+  "mascota_detectada": true o false,
+  "encias_visibles": true o false,
+  "color_detectado": "Rosa normal, Rosa pálido, Blanco, Azul/Morado, Amarillo, Rojo intenso o Marrón",
+  "color_hex": "#color representativo del tono detectado",
+  "estado": "Normal, Alerta, Urgente o Emergencia crítica",
+  "estado_color": "#52C97A normal, #FF9800 alerta, #F44336 urgente, #8B0000 emergencia",
+  "humedad": "Húmedas, Ligeramente secas o Secas",
+  "sarro": true o false,
+  "inflamacion": true o false,
+  "alerta_veterinario": true si no es Normal,
+  "diagnostico": "descripción clínica de lo observado",
+  "posibles_condiciones": ["condición 1", "condición 2"],
+  "recomendacion": "acción inmediata recomendada",
+  "urgencia_minutos": "tiempo máximo para ver al vet: null si normal, número si urgente"
+}
+Si no se ven las encías claramente: {"mascota_detectada": false}
+Responde SOLO el JSON."""
+
+# ════════════════════════════════════════════════════════════════
+#  PROMPT MAULLIDO
+# ════════════════════════════════════════════════════════════════
+PROMPT_MAULLIDO = """Eres el Dr. MeowScan, veterinario etólogo felino con 30 años de experiencia especializado en comunicación y comportamiento de gatos.
+
+Se te proporcionará una transcripción o descripción de sonidos felinos captados. Analiza el patrón de comunicación y determina el estado emocional y físico de la mascota.
+
+TIPOS DE MAULLIDOS FELINOS:
+- Maullido corto y agudo repetitivo: saludo, atención
+- Maullido largo y grave: dolor, malestar, estrés severo
+- Trino/chirrido (trrr): afecto, satisfacción
+- Ronroneo: comodidad O dolor (los gatos ronronean cuando sufren)
+- Chillido agudo: dolor agudo, miedo extremo
+- Gruñido bajo: amenaza, territorialidad
+- Maullido nocturno repetitivo: desorientación, demencia felina, en celo
+- Maullido insistente cerca del comedero: hambre
+- Silencio inusual: dolor severo, depresión
+
+Responde ÚNICAMENTE con JSON válido:
+{
+  "sonido_detectado": true o false,
+  "tipo_sonido": "Maullido, Ronroneo, Trino, Chillido, Gruñido, Silencio o Mixto",
+  "intensidad": "Suave, Moderado o Intenso",
+  "frecuencia": "Ocasional, Frecuente o Muy frecuente",
+  "estado_emocional": "Feliz, Hambriento, Estresado, Asustado, Dolorido, Territorial, En celo o Desorientado",
+  "estado_color": "#52C97A feliz, #FF9800 hambre/estrés, #F44336 dolor/miedo",
+  "nivel_urgencia": "Normal, Atención, Urgente",
+  "alerta_veterinario": true si hay señales de dolor o urgencia médica,
+  "interpretacion": "explicación detallada de lo que el gato está comunicando",
+  "posibles_causas": ["causa 1", "causa 2"],
+  "recomendacion": "qué hacer ahora mismo",
+  "curiosidad_felina": "dato interesante sobre este tipo de comunicación"
+}
+Si no se detecta sonido claro: {"sonido_detectado": false}
+Responde SOLO el JSON."""
+
 # ════════════════════════════════════════════════════════════════
 #  MOTOR DE ANÁLISIS
 # ════════════════════════════════════════════════════════════════
@@ -510,6 +618,79 @@ class MotorGroq:
             },
         }
 
+    # ── Analizar encías ──────────────────────────────────────
+    def analizar_encias_con_groq(self, img_bgr) -> Dict[str, Any]:
+        img_b64 = self._img_to_b64(img_bgr)
+        try:
+            return self._llamar_groq(img_b64, PROMPT_ENCIAS, max_tokens=900)
+        except Exception as e:
+            print(f"❌ Encias error: {e}")
+            return {"mascota_detectada": False}
+
+    def analizar_frame_encias(self, img_bytes: bytes) -> Dict[str, Any]:
+        arr = np.frombuffer(img_bytes, np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        if img is None:
+            raise ValueError("No se pudo decodificar la imagen")
+        resultado = self.analizar_encias_con_groq(img)
+        if not resultado.get("mascota_detectada", False) or            not resultado.get("encias_visibles", False):
+            return {"mascota_detectada": False, "timestamp": time.time(),
+                    "mensaje": "No se ven las encías. Levanta suavemente el labio de tu mascota y toma la foto."}
+        # Annotate image
+        estado = resultado.get("estado", "Normal")
+        color_map = {"Normal": (82,201,122), "Alerta": (0,152,255),
+                     "Urgente": (0,100,244), "Emergencia crítica": (0,0,180)}
+        color_cv = color_map.get(estado, (82,201,122))
+        img_an   = img.copy()
+        cv2.putText(img_an, f"Encias: {estado}",
+            (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color_cv, 2)
+        cv2.putText(img_an, resultado.get("color_detectado", ""),
+            (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_cv, 2)
+        _, buf   = cv2.imencode(".jpg", img_an, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        img_b64  = base64.b64encode(buf.tobytes()).decode()
+        return {
+            "mascota_detectada":    True,
+            "timestamp":            time.time(),
+            "imagen_anotada":       img_b64,
+            "color_detectado":      resultado.get("color_detectado", "-"),
+            "color_hex":            resultado.get("color_hex", "#FFB6C1"),
+            "estado":               estado,
+            "estado_color":         resultado.get("estado_color", "#52C97A"),
+            "humedad":              resultado.get("humedad", "-"),
+            "sarro":                resultado.get("sarro", False),
+            "inflamacion":          resultado.get("inflamacion", False),
+            "alerta_veterinario":   resultado.get("alerta_veterinario", False),
+            "diagnostico":          resultado.get("diagnostico", "-"),
+            "posibles_condiciones": resultado.get("posibles_condiciones", []),
+            "recomendacion":        resultado.get("recomendacion", "-"),
+            "urgencia_minutos":     resultado.get("urgencia_minutos", None),
+            "nivel":                estado,
+            "nivel_color":          resultado.get("estado_color", "#52C97A"),
+            "observaciones":        resultado.get("diagnostico", "-"),
+            "posibles_causas":      resultado.get("posibles_condiciones", []),
+        }
+
+    # ── Analizar maullido ────────────────────────────────────
+    def analizar_audio_maullido(self, descripcion: str) -> Dict[str, Any]:
+        """Analiza descripción de sonidos felinos con IA."""
+        try:
+            prompt_completo = f"{PROMPT_MAULLIDO}\n\nSonidos capturados:\n{descripcion}"
+            response = groq_client.chat.completions.create(
+                model="meta-llama/llama-4-maverick-17b-128e-instruct",
+                messages=[{"role": "user", "content": prompt_completo}],
+                max_tokens=1000,
+                temperature=0.2,
+            )
+            texto = response.choices[0].message.content.strip()
+            if "```json" in texto:
+                texto = texto.split("```json")[1].split("```")[0].strip()
+            elif "```" in texto:
+                texto = texto.split("```")[1].split("```")[0].strip()
+            return json.loads(texto)
+        except Exception as e:
+            print(f"❌ Maullido error: {e}")
+            return {"sonido_detectado": False, "error": str(e)}
+
     # ── Analizar respiración ─────────────────────────────────
     def analizar_respiracion_con_groq(self, img_bgr: np.ndarray) -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
@@ -531,20 +712,41 @@ class MotorGroq:
     # ── Historia médica predictiva ────────────────────────────
     def analizar_historia_medica(self, historial: list) -> Dict[str, Any]:
         if not historial:
-            return {"error": "Sin historial suficiente"}
-        resumen = json.dumps(historial[-20:], ensure_ascii=False)  # últimos 20 escaneos
+            return {"error": "sin_historial"}
+        
+        # Build detailed history summary for the AI
+        resumen_detallado = []
+        for i, scan in enumerate(historial):
+            entrada = {
+                "escaneo_num": i + 1,
+                "fecha": scan.get("fecha", f"Escaneo {i+1}"),
+                "datos": scan
+            }
+            resumen_detallado.append(entrada)
+        
+        resumen_json = json.dumps(resumen_detallado, ensure_ascii=False, indent=2)
+        total = len(historial)
+        
+        prompt_con_datos = f"""{PROMPT_HISTORIA}
+
+HISTORIAL COMPLETO ({total} escaneos):
+{resumen_json}
+
+Recuerda: analiza TODOS los escaneos, busca patrones y tendencias, y genera un diagnóstico clínico profesional."""
+
         try:
             response = groq_client.chat.completions.create(
                 model="meta-llama/llama-4-maverick-17b-128e-instruct",
-                messages=[{
-                    "role": "user",
-                    "content": f"{PROMPT_HISTORIA}\n\nHistorial de escaneos:\n{resumen}"
-                }],
-                max_tokens=1500,
-                temperature=0.2,
+                messages=[{"role": "user", "content": prompt_con_datos}],
+                max_tokens=2000,
+                temperature=0.1,
             )
             texto = response.choices[0].message.content.strip()
-            texto = texto.replace("```json", "").replace("```", "").strip()
+            # Clean JSON
+            if "```json" in texto:
+                texto = texto.split("```json")[1].split("```")[0].strip()
+            elif "```" in texto:
+                texto = texto.split("```")[1].split("```")[0].strip()
             return json.loads(texto)
         except Exception as e:
             print(f"❌ Historia error: {e}")
@@ -721,374 +923,6 @@ async def analizar_vomito(file: UploadFile = File(...), sesion_id: str = "defaul
     return JSONResponse(content=resultado)
 
 
-# ════════════════════════════════════════════════════════════════
-#  RESPIRACION TRACKER — Detección real de movimiento
-# ════════════════════════════════════════════════════════════════
-class RespiracionTracker:
-    """
-    Mide respiraciones reales usando variación de píxeles entre frames.
-    Algoritmo:
-    1. Detecta región de interés (ROI) en el pecho/abdomen
-    2. Calcula varianza de intensidad en ROI por frame
-    3. Aplica filtro de media móvil para suavizar señal
-    4. Detecta picos (inspiración) con scipy.signal.find_peaks
-    5. Calcula RPM real basado en tiempo transcurrido
-    """
-    def __init__(self, session_id: str):
-        self.session_id    = session_id
-        self.signal        = []          # señal de movimiento
-        self.timestamps    = []          # timestamp de cada frame
-        self.frame_count   = 0
-        self.start_time    = time.time()
-        self.last_frame    = None
-        self.roi_history   = collections.deque(maxlen=5)
-        self.lock          = threading.Lock()
-
-    def process_frame(self, img_bgr: np.ndarray) -> Dict[str, Any]:
-        with self.lock:
-            self.frame_count += 1
-            now = time.time()
-            gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-            gray = cv2.GaussianBlur(gray, (7, 7), 0)
-            h, w = gray.shape
-
-            # ROI: tercio central de la imagen (donde está el pecho)
-            y1, y2 = int(h * 0.25), int(h * 0.75)
-            x1, x2 = int(w * 0.20), int(w * 0.80)
-            roi = gray[y1:y2, x1:x2]
-
-            # Señal: diferencia con frame anterior (movimiento)
-            if self.last_frame is not None:
-                diff = cv2.absdiff(roi, self.last_frame)
-                signal_val = float(np.mean(diff))
-            else:
-                signal_val = 0.0
-
-            self.last_frame = roi.copy()
-            self.signal.append(signal_val)
-            self.timestamps.append(now)
-
-            # Calcular RPM si tenemos suficientes frames (>10)
-            rpm_real = None
-            patron   = "Midiendo..."
-            nivel    = "Calculando"
-            if len(self.signal) >= 10:
-                rpm_real, patron, nivel = self._calcular_rpm()
-
-            # Annotate frame
-            img_out = img_bgr.copy()
-            cv2.rectangle(img_out, (x1, y1), (x2, y2), (82, 201, 122), 2)
-            if rpm_real is not None:
-                color_cv = (82,201,122) if nivel=="Normal" else                            (0,152,255)  if nivel=="Elevada" else                            (0,100,244)  if nivel=="Alta"    else (0,0,200)
-                cv2.putText(img_out, f"{rpm_real:.0f} resp/min",
-                    (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color_cv, 2)
-                cv2.putText(img_out, nivel,
-                    (x1, y1-35), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_cv, 2)
-            else:
-                cv2.putText(img_out, f"Frame {self.frame_count} - Midiendo...",
-                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
-
-            _, buf = cv2.imencode(".jpg", img_out, [cv2.IMWRITE_JPEG_QUALITY, 75])
-            img_b64 = base64.b64encode(buf.tobytes()).decode()
-
-            return {
-                "frame":        self.frame_count,
-                "signal_val":   signal_val,
-                "rpm_parcial":  rpm_real,
-                "patron":       patron,
-                "nivel":        nivel,
-                "imagen":       img_b64,
-                "elapsed":      now - self.start_time,
-            }
-
-    def _calcular_rpm(self):
-        """Detecta picos en la señal de movimiento y calcula RPM."""
-        signal = np.array(self.signal)
-        # Normalizar señal
-        if signal.max() > signal.min():
-            signal_norm = (signal - signal.min()) / (signal.max() - signal.min())
-        else:
-            return None, "Sin movimiento", "Normal"
-
-        # Suavizar con media móvil
-        kernel = min(5, len(signal_norm) // 2)
-        if kernel > 1:
-            signal_smooth = np.convolve(signal_norm,
-                np.ones(kernel)/kernel, mode='same')
-        else:
-            signal_smooth = signal_norm
-
-        # Detectar picos (cada pico = una inspiración)
-        height_thresh = signal_smooth.mean() + signal_smooth.std() * 0.3
-        peaks, _ = find_peaks(signal_smooth,
-            height=height_thresh, distance=3)
-
-        elapsed = self.timestamps[-1] - self.timestamps[0] if len(self.timestamps) > 1 else 1
-        if len(peaks) < 2 or elapsed < 2:
-            return None, "Midiendo...", "Calculando"
-
-        # RPM = picos / minutos transcurridos
-        rpm = (len(peaks) / elapsed) * 60
-
-        # Clasificar
-        if rpm < 20:
-            nivel = "Baja"
-            patron = "Bradipnea"
-        elif rpm <= 30:
-            nivel = "Normal"
-            patron = "Normal"
-        elif rpm <= 40:
-            nivel = "Elevada"
-            patron = "Taquipnea leve"
-        elif rpm <= 60:
-            nivel = "Alta"
-            patron = "Taquipnea"
-        else:
-            nivel = "Emergencia"
-            patron = "Dificultad respiratoria severa"
-
-        return round(rpm, 1), patron, nivel
-
-    def get_resultado_final(self, ia_data: Dict) -> Dict[str, Any]:
-        """Combina medición real + análisis IA para resultado final."""
-        rpm_real, patron, nivel = self._calcular_rpm() if len(self.signal) >= 10             else (None, "Insuficientes datos", "Normal")
-
-        # Si IA detectó mascota, usar su análisis clínico
-        if ia_data.get("mascota_detectada"):
-            # Usar RPM real si disponible, sino el de la IA
-            rpm_final  = rpm_real if rpm_real else ia_data.get("respiraciones_por_minuto", 0)
-            patron_fin = patron   if rpm_real else ia_data.get("patron", "-")
-            nivel_fin  = nivel    if rpm_real else ia_data.get("nivel", "Normal")
-        else:
-            rpm_final  = rpm_real or 0
-            patron_fin = patron
-            nivel_fin  = nivel
-
-        color_map = {
-            "Normal":    "#52C97A",
-            "Elevada":   "#FF9800",
-            "Alta":      "#F44336",
-            "Emergencia":"#8B0000",
-            "Baja":      "#2196F3",
-        }
-        nivel_color = color_map.get(nivel_fin, "#52C97A")
-        alerta = nivel_fin in ["Alta", "Emergencia"]
-
-        return {
-            "mascota_detectada":        True,
-            "timestamp":                time.time(),
-            "respiraciones_por_minuto": rpm_final,
-            "patron":                   patron_fin,
-            "nivel":                    nivel_fin,
-            "nivel_color":              nivel_color,
-            "alerta_veterinario":       alerta,
-            "total_frames":             self.frame_count,
-            "duracion_seg":             round(time.time() - self.start_time, 1),
-            "metodo":                   "OpenCV + IA Groq Vision",
-            "observaciones":            ia_data.get("observaciones", patron_fin),
-            "posibles_causas":          ia_data.get("posibles_causas", []),
-            "recomendacion":            ia_data.get("recomendacion",
-                                          "Monitorea la respiración de tu mascota regularmente."),
-            "mensaje_urgencia":         ia_data.get("mensaje_urgencia", None)
-                                          if alerta else None,
-        }
-
-
-# ════════════════════════════════════════════════════════════════
-#  ESPASMO TRACKER — Detección real de movimiento dorsal
-# ════════════════════════════════════════════════════════════════
-class EspasmoTracker:
-    """
-    Detecta espasmos en la piel de la espalda usando:
-    1. Optical flow de Lucas-Kanade para detectar micro-movimientos
-    2. Análisis de varianza local en la región dorsal
-    3. Detección de picos de movimiento anormal
-    4. IA Groq para diagnóstico clínico del patrón
-    """
-    def __init__(self, session_id: str):
-        self.session_id   = session_id
-        self.frame_count  = 0
-        self.start_time   = time.time()
-        self.prev_gray    = None
-        self.movimientos  = []   # magnitud de movimiento por frame
-        self.timestamps   = []
-        self.picos_espasmo= 0
-        self.lock         = threading.Lock()
-
-    def process_frame(self, img_bgr: np.ndarray) -> Dict[str, Any]:
-        with self.lock:
-            self.frame_count += 1
-            now  = time.time()
-            gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-            gray = cv2.GaussianBlur(gray, (5, 5), 0)
-            h, w = gray.shape
-
-            # ROI dorsal: parte superior de la imagen (lomo del gato)
-            y1, y2 = int(h * 0.10), int(h * 0.55)
-            x1, x2 = int(w * 0.15), int(w * 0.85)
-            roi_curr = gray[y1:y2, x1:x2]
-
-            espasmo_val   = 0.0
-            flow_mag_mean = 0.0
-
-            if self.prev_gray is not None:
-                roi_prev = self.prev_gray[y1:y2, x1:x2]
-                # Optical flow Farneback para detectar micro-movimientos de piel
-                flow = cv2.calcOpticalFlowFarneback(
-                    roi_prev, roi_curr, None,
-                    0.5, 3, 15, 3, 5, 1.2, 0)
-                mag, _ = cv2.cartToPolar(flow[..., 0], flow[..., 1])
-                flow_mag_mean = float(np.mean(mag))
-
-                # Varianza local (ondulación de piel)
-                diff       = cv2.absdiff(roi_curr, roi_prev)
-                var_local  = float(np.std(diff))
-                espasmo_val = (flow_mag_mean * 0.6) + (var_local * 0.4)
-
-            self.movimientos.append(espasmo_val)
-            self.timestamps.append(now)
-            self.prev_gray = gray.copy()
-
-            # Detectar picos de espasmo
-            espasmo_detectado = False
-            intensidad        = "No detectado"
-            if len(self.movimientos) >= 8:
-                arr    = np.array(self.movimientos)
-                thresh = arr.mean() + arr.std() * 1.5
-                peaks, _ = find_peaks(arr, height=thresh, distance=4)
-                self.picos_espasmo = len(peaks)
-                if self.picos_espasmo >= 3:
-                    espasmo_detectado = True
-                    intensidad = "Severa" if self.picos_espasmo >= 8 else                                  "Moderada" if self.picos_espasmo >= 5 else "Leve"
-
-            # Annotate frame
-            img_out = img_bgr.copy()
-            color_roi = (0,200,100) if not espasmo_detectado else                         (0,152,255) if intensidad=="Leve" else                         (0,100,244) if intensidad=="Moderada" else (0,0,200)
-            cv2.rectangle(img_out, (x1, y1), (x2, y2), color_roi, 2)
-            cv2.putText(img_out, f"Espasmo: {intensidad} | Picos: {self.picos_espasmo}",
-                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_roi, 2)
-
-            _, buf = cv2.imencode(".jpg", img_out, [cv2.IMWRITE_JPEG_QUALITY, 75])
-            img_b64 = base64.b64encode(buf.tobytes()).decode()
-
-            return {
-                "frame":             self.frame_count,
-                "espasmo_val":       espasmo_val,
-                "espasmo_detectado": espasmo_detectado,
-                "intensidad":        intensidad,
-                "picos":             self.picos_espasmo,
-                "imagen":            img_b64,
-                "elapsed":           now - self.start_time,
-            }
-
-    def get_resultado_final(self, ia_data: Dict) -> Dict[str, Any]:
-        """Combina detección real + diagnóstico IA."""
-        arr = np.array(self.movimientos) if self.movimientos else np.array([0])
-        thresh = arr.mean() + arr.std() * 1.5
-        peaks, _ = find_peaks(arr, height=thresh, distance=4)             if len(arr) >= 8 else ([], {})
-        total_picos = len(peaks)
-
-        espasmo_det = total_picos >= 3
-        intensidad  = "Severa"   if total_picos >= 8 else                       "Moderada" if total_picos >= 5 else                       "Leve"     if total_picos >= 3 else "No detectado"
-
-        color_map = {
-            "No detectado": "#52C97A",
-            "Leve":         "#52C97A",
-            "Moderada":     "#FF9800",
-            "Severa":       "#F44336",
-        }
-        alerta = intensidad in ["Moderada", "Severa"]
-
-        # Usar diagnóstico IA para causas y recomendaciones
-        causas = ia_data.get("posibles_causas", [
-            "Síndrome de Hiperesthesia Felina",
-            "Estrés o ansiedad",
-            "Irritación cutánea"
-        ]) if espasmo_det else []
-
-        return {
-            "mascota_detectada":  True,
-            "timestamp":          time.time(),
-            "espasmo_detectado":  espasmo_det,
-            "intensidad":         intensidad,
-            "intensidad_color":   color_map.get(intensidad, "#52C97A"),
-            "total_picos":        total_picos,
-            "total_frames":       self.frame_count,
-            "duracion_seg":       round(time.time() - self.start_time, 1),
-            "metodo":             "Optical Flow + IA Groq Vision",
-            "zona_afectada":      ia_data.get("zona_afectada",
-                                    "Región dorsal" if espasmo_det else "Sin anomalías"),
-            "patron":             ia_data.get("patron",
-                                    f"{total_picos} picos detectados en {self.frame_count} frames"),
-            "posibles_causas":    causas,
-            "alerta_veterinario": alerta,
-            "recomendacion":      ia_data.get("recomendacion",
-                                    "Monitorea a tu mascota y consulta al veterinario si persiste."),
-            "mensaje_urgencia":   ia_data.get("mensaje_urgencia", None) if alerta else None,
-        }
-
-
-# Sesiones activas en memoria
-_resp_sessions:   Dict[str, RespiracionTracker] = {}
-_espasmo_sessions:Dict[str, EspasmoTracker]     = {}
-
-
-@app.post("/respiracion/frame")
-async def respiracion_frame(
-    file:       UploadFile = File(...),
-    session_id: str        = "default",
-    finalizar:  bool       = False,
-):
-    """Procesa un frame de respiración. Si finalizar=true, retorna resultado final."""
-    if session_id not in _resp_sessions:
-        _resp_sessions[session_id] = RespiracionTracker(session_id)
-    tracker  = _resp_sessions[session_id]
-    contenido = await file.read()
-    arr       = np.frombuffer(contenido, np.uint8)
-    img       = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-    if img is None:
-        raise HTTPException(status_code=400, detail="Frame inválido")
-
-    frame_data = tracker.process_frame(img)
-
-    if finalizar:
-        # Análisis IA en el último frame para diagnóstico clínico
-        ia_data = motor.analizar_respiracion_con_groq(img) if motor else {}
-        resultado = tracker.get_resultado_final(ia_data)
-        del _resp_sessions[session_id]
-        return JSONResponse(content=resultado)
-
-    return JSONResponse(content=frame_data)
-
-
-@app.post("/espasmos/frame")
-async def espasmos_frame(
-    file:       UploadFile = File(...),
-    session_id: str        = "default",
-    finalizar:  bool       = False,
-):
-    """Procesa un frame de espasmos. Si finalizar=true, retorna resultado final."""
-    if session_id not in _espasmo_sessions:
-        _espasmo_sessions[session_id] = EspasmoTracker(session_id)
-    tracker   = _espasmo_sessions[session_id]
-    contenido = await file.read()
-    arr       = np.frombuffer(contenido, np.uint8)
-    img       = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-    if img is None:
-        raise HTTPException(status_code=400, detail="Frame inválido")
-
-    frame_data = tracker.process_frame(img)
-
-    if finalizar:
-        # Análisis IA en el último frame para diagnóstico clínico
-        ia_data = motor.analizar_espasmos_con_groq(img) if motor else {}
-        resultado = tracker.get_resultado_final(ia_data)
-        del _espasmo_sessions[session_id]
-        return JSONResponse(content=resultado)
-
-    return JSONResponse(content=frame_data)
-
-# Mantener endpoints legacy para compatibilidad
 @app.post("/analizar_respiracion")
 async def analizar_respiracion(file: UploadFile = File(...)):
     if motor is None:
@@ -1113,6 +947,43 @@ async def analizar_espasmos(file: UploadFile = File(...)):
 
 class HistoriaRequest(BaseModel):
     historial: list
+
+@app.post("/analizar_encias")
+async def analizar_encias(file: UploadFile = File(...)):
+    if motor is None:
+        raise HTTPException(status_code=503, detail="Motor no inicializado")
+    contenido = await file.read()
+    try:
+        resultado = motor.analizar_frame_encias(contenido)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse(content=resultado)
+
+
+class MaullidoRequest(BaseModel):
+    descripcion: str
+    duracion_seg: float = 10.0
+    intensidad_db: float = 0.0
+
+@app.post("/analizar_maullido")
+async def analizar_maullido(req: MaullidoRequest):
+    if motor is None:
+        raise HTTPException(status_code=503, detail="Motor no inicializado")
+    try:
+        # Enrich description with technical data
+        desc_enriquecida = f"""
+Duración grabación: {req.duracion_seg} segundos
+Nivel de volumen promedio: {req.intensidad_db:.1f} dB
+Descripción del sonido detectado: {req.descripcion}
+"""
+        resultado = motor.analizar_audio_maullido(desc_enriquecida)
+        resultado["duracion_seg"]   = req.duracion_seg
+        resultado["intensidad_db"]  = req.intensidad_db
+        resultado["timestamp"]      = time.time()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse(content=resultado)
+
 
 @app.post("/historia_medica")
 async def historia_medica(req: HistoriaRequest):
