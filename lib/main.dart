@@ -28,6 +28,8 @@ import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -119,6 +121,102 @@ class L {
       'delete_scan_msg':'Se borrará este escaneo.',
       'delete':        'Borrar',
       'cancel_delete': 'Cancelar',
+      // Nuevas features
+      'vomit_title':       'Analizar Vómito 🔬',
+      'vomit_sub':         'Detecta causas por color con IA veterinaria',
+      'resp_title':        'Respiración',
+      'resp_sub':          'Mide resp/min',
+      'spasm_title':       'Espasmos',
+      'spasm_sub':         'Detecta temblores',
+      'gums_title':        'Encías',
+      'gums_sub':          'Detecta anemia y emergencias',
+      'meow_title':        'Maullido',
+      'meow_sub':          'Analiza emociones',
+      // Disclaimer
+      'disclaimer_title':  'Aviso importante',
+      'disclaimer_body':   '🩺 Este análisis es orientativo y de prevención temprana. SIEMPRE consulta un veterinario certificado para diagnósticos definitivos. Nuestra IA te ayuda a detectar señales de alerta a tiempo.',
+      'disclaimer_short':  '⚠️ Diagnóstico orientativo. Siempre consulta un veterinario certificado.',
+      'understood':        'Entendido, continuar',
+      // Scan screens
+      'scan_resp_title':   'Análisis Respiratorio',
+      'scan_spasm_title':  'Análisis de Espasmos',
+      'scan_gums_title':   'Análisis de Encías',
+      'scan_meow_title':   'Análisis de Maullido',
+      'point_chest':       'Apunta al pecho',
+      'point_back':        'Apunta a la espalda',
+      'lift_lip':          'Levanta suavemente el labio y apunta la cámara',
+      // Results
+      'result':            'Resultado',
+      'possible_causes':   'Posibles causas',
+      'recommendation':    'Recomendación',
+      'vet_clinics':       '🏥 Ver clínicas veterinarias cercanas',
+      'back_home':         '🏠 Volver al inicio',
+      'method':            'Método',
+      'frames_analyzed':   'frames analizados',
+      'vet_alert':         '¡Consulta al veterinario!',
+      'vet_alert_msg':     'Señales de alerta detectadas. Consulta al veterinario.',
+      // Historia médica
+      'medical_history':   'Historia Médica',
+      'history_building':  'Historia Médica en construcción',
+      'history_need':      'El Dr. MeowScan necesita al menos',
+      'history_need2':     'escaneos para generar un diagnóstico clínico confiable.',
+      'history_missing':   'Faltan',
+      'history_missing2':  'escaneos más 🐾',
+      'history_scan_tip':  'Cada escaneo aporta datos valiosos sobre la salud de tu mascota. ¡Sigue escaneando regularmente!',
+      'next_revision':     'Próxima revisión',
+      'next_scan':         'Próximo escaneo en MeowScan',
+      'prelim_diag':       'Diagnóstico Preliminar',
+      'time_evolution':    'Evolución temporal',
+      'first_scan':        'Primer escaneo',
+      'last_scan':         'Último escaneo',
+      'notable_changes':   'Cambios notables',
+      'active_alerts':     'Alertas activas',
+      'predictions':       'Predicciones preventivas',
+      'recommendations':   'Recomendaciones',
+      'vet_visit':         'Visita al veterinario',
+      'suggested_studies': 'Estudios sugeridos',
+      'observations':      'Observaciones',
+      // Maullido
+      'recording':         '¡Grabando! Deja que tu gato haga sonidos',
+      'tap_record':        'Toca para grabar',
+      'record_again':      'Grabar de nuevo 🔄',
+      'see_full_analysis': 'Ver análisis completo →',
+      'interpretation':    'Interpretación',
+      'did_you_know':      '¿Sabías que?',
+      'what_to_do':        'Qué hacer ahora',
+      'alert_signals':     'Señales de alerta detectadas',
+      'analyzing_ia':      'Analizando con IA 🧠',
+      // Auth
+      'change_password':   'Cambiar contraseña',
+      'delete_account':    'Eliminar mi cuenta',
+      'new_password':      'Nueva contraseña',
+      'confirm_password':  'Confirmar contraseña',
+      'save_password':     'Guardar contraseña',
+      'forgot_password':   '¿Olvidaste tu contraseña?',
+      'continue_google':   'Continuar con Google',
+      'recovery_sent':     'Te enviamos un correo de recuperación',
+      // Pets
+      'add_pet':           'Agregar mascota',
+      'pet_name':          'Nombre',
+      'select_type':       'Selecciona el tipo',
+      'cat':               'Gato',
+      'dog':               'Perro',
+      'delete_pet':        'Borrar mascota',
+      'delete_pet_msg':    'Se borrarán la mascota y todos sus escaneos.',
+      'are_you_sure':      '¿Estás seguro?',
+      // Settings
+      'logout':            'Cerrar sesión',
+      'settings':          'Ajustes',
+      'server':            'Servidor',
+      'test_connection':   'Probar conexión',
+      'language':          'Idioma',
+      'delete_account_confirm': 'Esta acción eliminará tu cuenta y todos tus datos permanentemente.',
+      // Scan screen
+      'analyzing':         'Analizando...',
+      'no_pet_detected':   'No se detectó la mascota',
+      'scan_tip_resp':     'Mantén la cámara enfocada en el pecho',
+      'scan_tip_spasm':    'Mantén la cámara enfocada en la espalda',
+      'scan_tip_gums':     'Asegúrate de ver bien las encías',
     },
     'en': {
       'app_name':      'MeowScan',
@@ -173,6 +271,102 @@ class L {
       'delete_scan_msg':'This scan will be deleted.',
       'delete':        'Delete',
       'cancel_delete': 'Cancel',
+      // New features
+      'vomit_title':       'Analyze Vomit 🔬',
+      'vomit_sub':         'Detect causes by color with AI',
+      'resp_title':        'Breathing',
+      'resp_sub':          'Measure breaths/min',
+      'spasm_title':       'Spasms',
+      'spasm_sub':         'Detect skin tremors',
+      'gums_title':        'Gums',
+      'gums_sub':          'Detect anemia and emergencies',
+      'meow_title':        'Meow',
+      'meow_sub':          'Analyze emotions',
+      // Disclaimer
+      'disclaimer_title':  'Important notice',
+      'disclaimer_body':   '🩺 This analysis is for early prevention purposes only. ALWAYS consult a certified veterinarian for definitive diagnoses. Our AI helps you detect warning signs early.',
+      'disclaimer_short':  '⚠️ Indicative diagnosis. Always consult a certified veterinarian.',
+      'understood':        'Got it, continue',
+      // Scan screens
+      'scan_resp_title':   'Breathing Analysis',
+      'scan_spasm_title':  'Spasm Analysis',
+      'scan_gums_title':   'Gum Analysis',
+      'scan_meow_title':   'Meow Analysis',
+      'point_chest':       'Point at the chest',
+      'point_back':        'Point at the back',
+      'lift_lip':          'Gently lift the lip and point the camera',
+      // Results
+      'result':            'Result',
+      'possible_causes':   'Possible causes',
+      'recommendation':    'Recommendation',
+      'vet_clinics':       '🏥 Find nearby vet clinics',
+      'back_home':         '🏠 Back to home',
+      'method':            'Method',
+      'frames_analyzed':   'frames analyzed',
+      'vet_alert':         'See a vet now!',
+      'vet_alert_msg':     'Warning signals detected. Please consult a veterinarian.',
+      // Medical history
+      'medical_history':   'Medical History',
+      'history_building':  'Medical History in progress',
+      'history_need':      'Dr. MeowScan needs at least',
+      'history_need2':     'scans to generate a reliable clinical diagnosis.',
+      'history_missing':   'Still need',
+      'history_missing2':  'more scans 🐾',
+      'history_scan_tip':  'Every scan adds valuable health data for your pet. Keep scanning regularly!',
+      'next_revision':     'Next check-up',
+      'next_scan':         'Next scan in MeowScan',
+      'prelim_diag':       'Preliminary Diagnosis',
+      'time_evolution':    'Timeline',
+      'first_scan':        'First scan',
+      'last_scan':         'Latest scan',
+      'notable_changes':   'Notable changes',
+      'active_alerts':     'Active alerts',
+      'predictions':       'Preventive predictions',
+      'recommendations':   'Recommendations',
+      'vet_visit':         'Vet visit',
+      'suggested_studies': 'Suggested tests',
+      'observations':      'Observations',
+      // Meow
+      'recording':         'Recording! Let your cat make sounds',
+      'tap_record':        'Tap to record',
+      'record_again':      'Record again 🔄',
+      'see_full_analysis': 'See full analysis →',
+      'interpretation':    'Interpretation',
+      'did_you_know':      'Did you know?',
+      'what_to_do':        'What to do now',
+      'alert_signals':     'Warning signals detected',
+      'analyzing_ia':      'Analyzing with AI 🧠',
+      // Auth
+      'change_password':   'Change password',
+      'delete_account':    'Delete my account',
+      'new_password':      'New password',
+      'confirm_password':  'Confirm password',
+      'save_password':     'Save password',
+      'forgot_password':   'Forgot your password?',
+      'continue_google':   'Continue with Google',
+      'recovery_sent':     'We sent you a recovery email',
+      // Pets
+      'add_pet':           'Add pet',
+      'pet_name':          'Name',
+      'select_type':       'Select type',
+      'cat':               'Cat',
+      'dog':               'Dog',
+      'delete_pet':        'Delete pet',
+      'delete_pet_msg':    'This will delete the pet and all its scans.',
+      'are_you_sure':      'Are you sure?',
+      // Settings
+      'logout':            'Log out',
+      'settings':          'Settings',
+      'server':            'Server',
+      'test_connection':   'Test connection',
+      'language':          'Language',
+      'delete_account_confirm': 'This action will permanently delete your account and all your data.',
+      // Scan screen
+      'analyzing':         'Analyzing...',
+      'no_pet_detected':   'Pet not detected',
+      'scan_tip_resp':     'Keep the camera focused on the chest',
+      'scan_tip_spasm':    'Keep the camera focused on the back',
+      'scan_tip_gums':     'Make sure the gums are clearly visible',
     },
   };
 
@@ -1101,16 +1295,30 @@ class _HomeTabState extends State<HomeTab> {
           const SizedBox(height: 12),
           Row(children: [
             Expanded(child: _miniCard(
-              emoji: "🫁", titulo: "Respiración",
-              subtitulo: "Mide resp/min",
+              emoji: "🫁", titulo: L.get('resp_title'),
+              subtitulo: L.get('resp_sub'),
               colores: [Color(0xFF00B894), Color(0xFF00CEC9)],
               onTap: () => _openScan('respiracion'))),
             const SizedBox(width: 12),
             Expanded(child: _miniCard(
-              emoji: "🐾", titulo: "Espasmos",
-              subtitulo: "Detecta temblores",
+              emoji: "🐾", titulo: L.get('spasm_title'),
+              subtitulo: L.get('spasm_sub'),
               colores: [Color(0xFFE17055), Color(0xFFD63031)],
               onTap: () => _openScan('espasmos'))),
+          ]),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: _miniCard(
+              emoji: "👅", titulo: L.get('gums_title'),
+              subtitulo: L.get('gums_sub'),
+              colores: [Color(0xFFFF6B9D), Color(0xFFFF4E8A)],
+              onTap: () => _openScan('encias'))),
+            const SizedBox(width: 12),
+            Expanded(child: _miniCard(
+              emoji: "😿", titulo: L.get('meow_title'),
+              subtitulo: L.get('meow_sub'),
+              colores: [Color(0xFF6C5CE7), Color(0xFFA855F7)],
+              onTap: () => _openMaullido())),
           ]),
           const SizedBox(height: 24),
           _catSelector(),
@@ -1193,9 +1401,9 @@ class _HomeTabState extends State<HomeTab> {
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Analizar Vómito 🔬",
+            Text(L.get('vomit_title'),
               style: _nunito(17, Colors.white, weight: FontWeight.w900)),
-            Text("Detecta causas por color con IA veterinaria",
+            Text(L.get('vomit_sub'),
               style: _nunito(12, Colors.white70)),
           ],
         )),
@@ -1247,7 +1455,7 @@ class _HomeTabState extends State<HomeTab> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(children: [
           const Text("⚠️ ", style: TextStyle(fontSize: 22)),
-          Expanded(child: Text("Aviso importante",
+          Expanded(child: Text(L.get('disclaimer_title'),
             style: _nunito(16, kText, weight: FontWeight.w800))),
         ]),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -1258,9 +1466,7 @@ class _HomeTabState extends State<HomeTab> {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: kYellow.withOpacity(0.5))),
             child: Text(
-              "🩺 Este análisis es orientativo y de prevención temprana. "
-              "SIEMPRE consulta un veterinario certificado para diagnósticos definitivos. "
-              "Nuestra IA te ayuda a detectar señales de alerta a tiempo.",
+              L.get('disclaimer_body'),
               style: _nunito(13, kText),
             )),
         ]),
@@ -1268,7 +1474,7 @@ class _HomeTabState extends State<HomeTab> {
           TextButton(onPressed: () => Navigator.pop(context, false),
             child: Text("Cancelar", style: _nunito(14, kMuted))),
           TextButton(onPressed: () => Navigator.pop(context, true),
-            child: Text("Entendido, continuar",
+            child: Text(L.get('understood'),
               style: _nunito(14, kPurple, weight: FontWeight.w800))),
         ],
       ));
@@ -1279,13 +1485,58 @@ class _HomeTabState extends State<HomeTab> {
           cameras: widget.cameras, serverIp: ip,
           cat: _selected!, user: widget.user,
           onComplete: widget.onRefresh);
-      } else {
+      } else if (tipo == 'espasmos') {
         return EspasmosScanScreen(
+          cameras: widget.cameras, serverIp: ip,
+          cat: _selected!, user: widget.user,
+          onComplete: widget.onRefresh);
+      } else {
+        return EnciasScreen(
           cameras: widget.cameras, serverIp: ip,
           cat: _selected!, user: widget.user,
           onComplete: widget.onRefresh);
       }
     }));
+  }
+
+  void _openMaullido() async {
+    if (_selected == null) { _addCat(); return; }
+    final ok = await Permission.microphone.request();
+    if (!ok.isGranted) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(L.get('cam_denied') ?? "Permiso de micrófono denegado")));
+      return;
+    }
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(children: [
+          const Text("⚠️ ", style: TextStyle(fontSize: 22)),
+          Expanded(child: Text(L.get('disclaimer_title'),
+            style: _nunito(16, kText, weight: FontWeight.w800))),
+        ]),
+        content: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: kYellow.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: kYellow.withOpacity(0.5))),
+          child: Text(
+            "🩺 Este análisis es orientativo. SIEMPRE consulta un veterinario certificado para diagnósticos definitivos.",
+            style: _nunito(13, kText))),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false),
+            child: Text("Cancelar", style: _nunito(14, kMuted))),
+          TextButton(onPressed: () => Navigator.pop(context, true),
+            child: Text("Entendido", style: _nunito(14, kPurple, weight: FontWeight.w800))),
+        ]));
+    if (confirm != true || !mounted) return;
+    final ip = await StorageService.getServerIp();
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => MaullidoScreen(
+        cat: _selected!, user: widget.user, serverIp: ip,
+        onComplete: widget.onRefresh)));
   }
 
   Widget _catSelector() => Column(
@@ -1426,7 +1677,7 @@ class _AddCatSheetState extends State<AddCatSheet> {
           Text(_tipo == 'gato' ? "🐱" : "🐶",
               style: const TextStyle(fontSize: 28)),
           const SizedBox(width: 10),
-          kTitle("Agregar mascota", size: 20, color: kCoral),
+          kTitle(L.get('add_pet'), size: 20, color: kCoral),
         ]),
         const SizedBox(height: 16),
         kLabel("TIPO DE MASCOTA"),
@@ -1446,7 +1697,7 @@ class _AddCatSheetState extends State<AddCatSheet> {
               child: Column(children: [
                 const Text("🐱", style: TextStyle(fontSize: 28)),
                 const SizedBox(height: 4),
-                Text("Gato", style: _nunito(13,
+                Text(L.get('cat'), style: _nunito(13,
                     _tipo == 'gato' ? kCoral : kMuted,
                     weight: FontWeight.w800)),
               ]),
@@ -1467,7 +1718,7 @@ class _AddCatSheetState extends State<AddCatSheet> {
               child: Column(children: [
                 const Text("🐶", style: TextStyle(fontSize: 28)),
                 const SizedBox(height: 4),
-                Text("Perro", style: _nunito(13,
+                Text(L.get('dog'), style: _nunito(13,
                     _tipo == 'perro' ? kTurquoise : kMuted,
                     weight: FontWeight.w800)),
               ]),
@@ -2677,7 +2928,7 @@ class _SettingsTabState extends State<SettingsTab> {
           const SizedBox(height: 8),
           GestureDetector(
             onTap: () => _confirmDeleteAccount(context),
-            child: Center(child: Text("Eliminar mi cuenta",
+            child: Center(child: Text(L.get('delete_account'),
               style: _nunito(13, kMuted).copyWith(decoration: TextDecoration.underline)))),
 
           const SizedBox(height: 20),
@@ -3091,7 +3342,7 @@ class VomitoResultScreen extends StatelessWidget {
                 kBody(signos, size: 13, color: kMuted)),
 
             const SizedBox(height: 24),
-            kOutlineBtn("🏠 Volver al inicio",
+            kOutlineBtn(L.get('back_home'),
               () => Navigator.of(context).popUntil((r) => r.isFirst),
               color: kPurple),
             const SizedBox(height: 20),
@@ -3356,8 +3607,8 @@ class RespiracionScanScreen extends StatelessWidget {
   Widget build(BuildContext context) => _MedicoScanBase(
     cameras: cameras, serverIp: serverIp,
     endpoint: "analizar_respiracion",
-    titulo: "Análisis Respiratorio", emoji: "🫁",
-    instruccion: "Apunta al pecho\nde ${cat.name}",
+    titulo: L.get('scan_resp_title'), emoji: "🫁",
+    instruccion: "${L.get('point_chest')}\nde ${cat.name}",
     duracion: 30, cat: cat, user: user, onComplete: onComplete);
 }
 
@@ -3375,8 +3626,8 @@ class EspasmosScanScreen extends StatelessWidget {
   Widget build(BuildContext context) => _MedicoScanBase(
     cameras: cameras, serverIp: serverIp,
     endpoint: "analizar_espasmos",
-    titulo: "Análisis de Espasmos", emoji: "🐾",
-    instruccion: "Apunta a la espalda\nde ${cat.name}",
+    titulo: L.get('scan_spasm_title'), emoji: "🐾",
+    instruccion: "${L.get('point_back')}\nde ${cat.name}",
     duracion: 60, cat: cat, user: user, onComplete: onComplete);
 }
 
@@ -3451,7 +3702,7 @@ class MedicoResultScreen extends StatelessWidget {
                 const Text("⚠️", style: TextStyle(fontSize: 16)),
                 const SizedBox(width: 8),
                 Expanded(child: Text(
-                  "Diagnóstico orientativo. Siempre consulta un veterinario certificado para diagnósticos definitivos.",
+                  L.get('disclaimer_short'),
                   style: _nunito(11, kMuted))),
               ]),
             ),
@@ -3472,7 +3723,7 @@ class MedicoResultScreen extends StatelessWidget {
                   Expanded(child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("¡Consulta al veterinario!",
+                      Text(L.get('vet_alert'),
                         style: _nunito(14, Colors.red, weight: FontWeight.w900)),
                       Text(msgUrg, style: _nunito(12, Colors.red.shade800)),
                     ])),
@@ -3486,7 +3737,7 @@ class MedicoResultScreen extends StatelessWidget {
               decoration: kCardDeco(border: accentColor.withOpacity(0.3)),
               child: Column(children: [
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  kTitle("Resultado", size: 15),
+                  kTitle(L.get('result'), size: 15),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
@@ -3513,14 +3764,14 @@ class MedicoResultScreen extends StatelessWidget {
                   _fila("📍 Zona", resultado["zona_afectada"]!, accentColor),
                 ],
                 const SizedBox(height: 8),
-                _fila("🔍 Observaciones", obs, accentColor),
+                _fila("🔍 ${L.get('observations')}", obs, accentColor),
                 if (resultado["metodo"] != null) ...[
                   const SizedBox(height: 6),
-                  _fila("⚙️ Método", resultado["metodo"]!, accentColor),
+                  _fila("⚙️ ${L.get('method')}", resultado["metodo"]!, accentColor),
                 ],
                 if (resultado["total_frames"] != null) ...[
                   const SizedBox(height: 6),
-                  _fila("📸 Frames", "${resultado["total_frames"]} analizados", accentColor),
+                  _fila("📸 Frames", "${resultado["total_frames"]} ${L.get('frames_analyzed')}", accentColor),
                 ],
               ]),
             ),
@@ -3532,7 +3783,7 @@ class MedicoResultScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 decoration: kCardDeco(border: kCoral.withOpacity(0.2)),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text("⚠️ Posibles causas",
+                  Text("⚠️ ${L.get('possible_causes')}",
                     style: _nunito(14, kCoral, weight: FontWeight.w800)),
                   const SizedBox(height: 8),
                   ...causas.map((causa) => Padding(
@@ -3560,7 +3811,7 @@ class MedicoResultScreen extends StatelessWidget {
                 Expanded(child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    kTitle("Recomendación", size: 13),
+                    kTitle(L.get('recommendation'), size: 13),
                     const SizedBox(height: 4),
                     kBody(recom, size: 13),
                   ])),
@@ -3587,14 +3838,14 @@ class MedicoResultScreen extends StatelessWidget {
                 child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   const Icon(Icons.local_hospital_rounded, color: kCoral, size: 22),
                   const SizedBox(width: 10),
-                  Text("🏥 Ver clínicas veterinarias cercanas",
+                  Text(L.get('vet_clinics'),
                     style: _nunito(14, kCoral, weight: FontWeight.w700)),
                 ]),
               ),
             ),
 
             const SizedBox(height: 12),
-            kOutlineBtn("🏠 Volver al inicio",
+            kOutlineBtn(L.get('back_home'),
               () => Navigator.of(context).popUntil((r) => r.isFirst),
               color: kPurple),
             const SizedBox(height: 20),
@@ -3680,7 +3931,7 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
                   decoration: kCardDeco(radius: 14),
                   child: const Icon(Icons.arrow_back_ios_new, color: kPurple, size: 18))),
               const SizedBox(width: 12),
-              Expanded(child: kTitle("📋 Historia Médica", size: 20)),
+              Expanded(child: kTitle("📋 ${L.get('medical_history')}", size: 20)),
               GestureDetector(
                 onTap: _cargar,
                 child: Container(padding: const EdgeInsets.all(10),
@@ -3694,7 +3945,7 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
                 children: [
                   CircularProgressIndicator(color: kPurple),
                   SizedBox(height: 16),
-                  Text("Analizando historial con IA... 🧠"),
+                  Text("${L.get('analyzing_ia')}"),
                 ]))
             : _error != null
               ? Center(child: Padding(
@@ -3741,7 +3992,7 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: kYellow.withOpacity(0.4))),
           child: Text(
-            "⚠️ Diagnóstico orientativo de prevención temprana. Siempre consulta un veterinario certificado.",
+            L.get('disclaimer_short'),
             style: _nunito(11, kMuted), textAlign: TextAlign.center)),
 
         // Score
@@ -3780,7 +4031,7 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
 
         if (alertas.isNotEmpty) ...[
           const SizedBox(height: 16),
-          _seccion("🚨 Alertas activas", kCoral, Column(
+          _seccion("🚨 ${L.get('active_alerts')}", kCoral, Column(
             children: alertas.map<Widget>((a) {
               final urgColor = a["urgencia"] == "Alta" ? kCoral
                   : a["urgencia"] == "Media" ? Colors.orange : kGreen;
@@ -3814,7 +4065,7 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
 
         if (prediccs.isNotEmpty) ...[
           const SizedBox(height: 16),
-          _seccion("🔮 Predicciones preventivas", kPurple, Column(
+          _seccion("🔮 ${L.get('predictions')}", kPurple, Column(
             children: prediccs.map<Widget>((p) {
               final probColor = p["probabilidad"] == "Alta" ? kCoral
                   : p["probabilidad"] == "Media" ? Colors.orange : kGreen;
@@ -3842,7 +4093,7 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
 
         if (recomends.isNotEmpty) ...[
           const SizedBox(height: 16),
-          _seccion("💡 Recomendaciones", kTurquoise, Column(
+          _seccion("💡 ${L.get('recommendations')}", kTurquoise, Column(
             children: recomends.asMap().entries.map<Widget>((e) =>
               Padding(padding: const EdgeInsets.only(bottom: 6),
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -3866,7 +4117,7 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
               Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  kTitle("Próxima revisión", size: 13),
+                  kTitle(L.get('next_revision'), size: 13),
                   const SizedBox(height: 2),
                   kBody(proxima, size: 13),
                 ])),
@@ -3890,7 +4141,7 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
             child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               const Icon(Icons.local_hospital_rounded, color: kCoral, size: 22),
               const SizedBox(width: 10),
-              Text("🏥 Ver clínicas veterinarias cercanas",
+              Text(L.get('vet_clinics'),
                 style: _nunito(14, kCoral, weight: FontWeight.w700)),
             ])),
         ),
@@ -3906,6 +4157,482 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
       const SizedBox(height: 12),
       child,
     ]));
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ENCÍAS SCREEN
+// ════════════════════════════════════════════════════════════════
+class EnciasScreen extends StatelessWidget {
+  final List<CameraDescription> cameras;
+  final String serverIp; final CatProfile cat;
+  final UserAccount user; final VoidCallback onComplete;
+  const EnciasScreen({Key? key, required this.cameras,
+      required this.serverIp, required this.cat,
+      required this.user, required this.onComplete}) : super(key: key);
+  @override
+  Widget build(BuildContext context) => _MedicoScanBase(
+    cameras: cameras, serverIp: serverIp,
+    endpoint: "analizar_encias",
+    titulo: L.get('scan_gums_title'), emoji: "👅",
+    instruccion: "${L.get('lift_lip')}\nde ${cat.name}",
+    duracion: 1, cat: cat, user: user, onComplete: onComplete);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  MAULLIDO SCREEN
+// ════════════════════════════════════════════════════════════════
+class MaullidoScreen extends StatefulWidget {
+  final CatProfile cat; final UserAccount user;
+  final String serverIp; final VoidCallback onComplete;
+  const MaullidoScreen({Key? key, required this.cat,
+      required this.user, required this.serverIp,
+      required this.onComplete}) : super(key: key);
+  @override
+  State<MaullidoScreen> createState() => _MaullidoScreenState();
+}
+
+class _MaullidoScreenState extends State<MaullidoScreen> {
+  final AudioRecorder _recorder = AudioRecorder();
+  bool   _recording  = false;
+  bool   _analyzing  = false;
+  int    _secs       = 0;
+  int    _maxSecs    = 15;
+  Timer? _timer;
+  String? _recordPath;
+  double _peakDb     = 0;
+  double _currentDb  = 0;
+  List<double> _dbHistory = [];
+  Map<String, dynamic>? _resultado;
+  String _instruccion = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _instruccion = L.get('tap_record');
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _recorder.dispose();
+    super.dispose();
+  }
+
+  Future<void> _startRecording() async {
+    final dir  = await getTemporaryDirectory();
+    final path = '${dir.path}/maullido_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    await _recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+    setState(() { _recording = true; _secs = 0; _dbHistory = []; _instruccion = "${L.get('recording')}"; });
+    _recordPath = path;
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) async {
+      final amp = await _recorder.getAmplitude();
+      final db  = amp.current.isFinite ? amp.current : -60.0;
+      setState(() {
+        _secs++;
+        _currentDb = db;
+        if (db > _peakDb) _peakDb = db;
+        _dbHistory.add(db);
+      });
+      if (_secs >= _maxSecs) _stopAndAnalyze();
+    });
+  }
+
+  Future<void> _stopAndAnalyze() async {
+    _timer?.cancel();
+    setState(() { _recording = false; _analyzing = true; _instruccion = "Analizando con IA 🧠"; });
+    await _recorder.stop();
+    // Build audio description from db history
+    final avgDb    = _dbHistory.isNotEmpty
+        ? _dbHistory.reduce((a, b) => a + b) / _dbHistory.length : -60.0;
+    final loudSecs = _dbHistory.where((d) => d > -30).length;
+    final silSecs  = _dbHistory.where((d) => d < -50).length;
+    String desc;
+    if (loudSecs == 0 && silSecs > _maxSecs * 0.8) {
+      desc = "Grabación mayormente en silencio. La mascota no emitió sonidos audibles.";
+    } else {
+      desc = "Grabación de $_secs segundos. "
+          "Volumen promedio: ${avgDb.toStringAsFixed(1)} dB. "
+          "Pico máximo: ${_peakDb.toStringAsFixed(1)} dB. "
+          "Segundos con sonido activo (>-30dB): $loudSecs de $_secs. "
+          "Segundos en silencio (<-50dB): $silSecs de $_secs. "
+          "${loudSecs > 5 ? "La mascota emitió sonidos de forma frecuente e intensa." : ""}"
+          "${loudSecs >= 2 && loudSecs <= 5 ? "La mascota emitió algunos sonidos ocasionales." : ""}"
+          "${silSecs > _maxSecs * 0.7 ? "La mascota permaneció principalmente en silencio." : ""}";
+    }
+    try {
+      final ip    = widget.serverIp;
+      final proto = ip.contains("onrender") || ip.contains("trycloudflare") ? "https" : "http";
+      final port  = ip.contains("onrender") || ip.contains("trycloudflare") ? "" : ":8000";
+      final uri   = Uri.parse("$proto://$ip${port}/analizar_maullido");
+      final res   = await http.post(uri,
+        headers: {"Content-Type": "application/json"},
+        body: json.encode({
+          "descripcion":   desc,
+          "duracion_seg":  _secs.toDouble(),
+          "intensidad_db": avgDb,
+        })).timeout(const Duration(seconds: 20));
+      if (res.statusCode == 200 && mounted) {
+        final data = json.decode(res.body);
+        setState(() { _resultado = data; _analyzing = false; });
+      } else {
+        setState(() { _analyzing = false; });
+      }
+    } catch (e) {
+      if (mounted) setState(() { _analyzing = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(child: Column(children: [
+        // Top bar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          decoration: const BoxDecoration(gradient: LinearGradient(
+            colors: [Colors.black87, Colors.transparent],
+            begin: Alignment.topCenter, end: Alignment.bottomCenter)),
+          child: Row(children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+                child: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18))),
+            const Spacer(),
+            Text("😿 ${L.get('scan_meow_title')}",
+              style: _nunito(15, Colors.white, weight: FontWeight.w800)),
+            const Spacer(),
+            const SizedBox(width: 34),
+          ])),
+        const Spacer(),
+        // Main circle
+        Stack(alignment: Alignment.center, children: [
+          // Sound wave rings
+          if (_recording) ...[
+            AnimatedContainer(
+              duration: Duration(milliseconds: 300),
+              width: 280 + (_currentDb.abs() < 60 ? (60 - _currentDb.abs()) * 2 : 0),
+              height: 280 + (_currentDb.abs() < 60 ? (60 - _currentDb.abs()) * 2 : 0),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF6C5CE7).withOpacity(0.3), width: 2))),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 250 + (_currentDb.abs() < 60 ? (60 - _currentDb.abs()) * 1.5 : 0),
+              height: 250 + (_currentDb.abs() < 60 ? (60 - _currentDb.abs()) * 1.5 : 0),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF6C5CE7).withOpacity(0.5), width: 2))),
+          ],
+          Container(
+            width: 220, height: 220,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF6C5CE7), Color(0xFFA855F7)],
+                begin: Alignment.topLeft, end: Alignment.bottomRight),
+              boxShadow: [BoxShadow(
+                color: const Color(0xFF6C5CE7).withOpacity(0.5),
+                blurRadius: 30)]),
+            child: _resultado != null
+              ? _resultadoCirculo()
+              : _analyzing
+                ? const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+                    SizedBox(height: 12),
+                    Text("Analizando...", style: TextStyle(color: Colors.white, fontSize: 14))])
+                : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Text(_recording ? "🎙️" : "😿",
+                      style: const TextStyle(fontSize: 60)),
+                    const SizedBox(height: 8),
+                    Text(_recording ? "$_secs / $_maxSecs seg" : L.get('tap_record'),
+                      style: _nunito(16, Colors.white, weight: FontWeight.w900)),
+                    if (_recording) ...[
+                      const SizedBox(height: 4),
+                      Text("${_currentDb.toStringAsFixed(0)} dB",
+                        style: _nunito(12, Colors.white70)),
+                    ] else
+                      Text(L.get('tap_record'),
+                        style: _nunito(12, Colors.white70)),
+                  ])),
+        ]),
+        const SizedBox(height: 32),
+        // Controls
+        if (_resultado == null)
+          GestureDetector(
+            onTap: _recording ? _stopAndAnalyze
+                : (_analyzing ? null : _startRecording),
+            child: Container(
+              width: 72, height: 72,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _recording ? Colors.red : const Color(0xFF6C5CE7),
+                boxShadow: [BoxShadow(
+                  color: (_recording ? Colors.red : const Color(0xFF6C5CE7)).withOpacity(0.5),
+                  blurRadius: 20)]),
+              child: Icon(
+                _recording ? Icons.stop_rounded : Icons.mic_rounded,
+                color: Colors.white, size: 32)))
+        else ...[
+          // Ver resultado completo
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Column(children: [
+              GestureDetector(
+                onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(
+                  builder: (_) => MaullidoResultScreen(
+                    resultado: _resultado!, cat: widget.cat))),
+                child: Container(
+                  width: double.infinity, padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF6C5CE7), Color(0xFFA855F7)]),
+                    borderRadius: BorderRadius.circular(16)),
+                  child: Text(L.get('see_full_analysis'),
+                    style: _nunito(15, Colors.white, weight: FontWeight.w800),
+                    textAlign: TextAlign.center))),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => setState(() { _resultado = null; _secs = 0; _peakDb = 0; }),
+                child: Text(L.get('record_again'),
+                  style: _nunito(14, Colors.white70))),
+            ])),
+        ],
+        const Spacer(),
+      ])),
+    );
+  }
+
+  Widget _resultadoCirculo() {
+    final estado = _resultado!["estado_emocional"] ?? "Analizando";
+    final colorStr = _resultado!["estado_color"] ?? "#6C5CE7";
+    Color col;
+    try { col = Color(int.parse(colorStr.replaceFirst("#","0xFF"))); }
+    catch (_) { col = const Color(0xFF6C5CE7); }
+    return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Text(_resultado!["tipo_sonido"] == "Ronroneo" ? "😻"
+          : _resultado!["tipo_sonido"] == "Chillido" ? "😱"
+          : _resultado!["tipo_sonido"] == "Gruñido"  ? "😾"
+          : "😿", style: const TextStyle(fontSize: 40)),
+      const SizedBox(height: 6),
+      Text(estado, style: _nunito(14, Colors.white, weight: FontWeight.w900),
+        textAlign: TextAlign.center),
+      const SizedBox(height: 4),
+      Text(_resultado!["tipo_sonido"] ?? "",
+        style: _nunito(11, Colors.white70)),
+    ]);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  MAULLIDO RESULT SCREEN
+// ════════════════════════════════════════════════════════════════
+class MaullidoResultScreen extends StatelessWidget {
+  final Map<String, dynamic> resultado;
+  final CatProfile cat;
+  const MaullidoResultScreen({Key? key,
+      required this.resultado, required this.cat}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final estado     = resultado["estado_emocional"] ?? "Desconocido";
+    final colorStr   = resultado["estado_color"] ?? "#6C5CE7";
+    final tipo       = resultado["tipo_sonido"] ?? "-";
+    final intensidad = resultado["intensidad"] ?? "-";
+    final interp     = resultado["interpretacion"] ?? "-";
+    final causas     = (resultado["posibles_causas"] as List?) ?? [];
+    final recom      = resultado["recomendacion"] ?? "-";
+    final curiosidad = resultado["curiosidad_felina"] ?? "";
+    final alerta     = resultado["alerta_veterinario"] ?? false;
+    final urgencia   = resultado["nivel_urgencia"] ?? "Normal";
+
+    Color accentColor;
+    try { accentColor = Color(int.parse(colorStr.replaceFirst("#","0xFF"))); }
+    catch (_) { accentColor = const Color(0xFF6C5CE7); }
+
+    String emoji = tipo == "Ronroneo" ? "😻"
+        : tipo == "Chillido" ? "😱"
+        : tipo == "Gruñido"  ? "😾"
+        : tipo == "Trino"    ? "😸"
+        : tipo == "Silencio" ? "🤫" : "😿";
+
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(children: [
+          Row(children: [
+            GestureDetector(
+              onTap: () => Navigator.of(context).popUntil((r) => r.isFirst),
+              child: Container(padding: const EdgeInsets.all(10),
+                decoration: kCardDeco(radius: 14),
+                child: const Icon(Icons.home_rounded, color: kPurple, size: 22))),
+            const SizedBox(width: 12),
+            Expanded(child: kTitle("$emoji Análisis de Maullido", size: 18)),
+          ]),
+          const SizedBox(height: 16),
+
+          // Disclaimer
+          Container(
+            width: double.infinity, padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: kYellow.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: kYellow.withOpacity(0.4))),
+            child: Text("⚠️ Diagnóstico orientativo. Siempre consulta un veterinario certificado.",
+              style: _nunito(11, kMuted), textAlign: TextAlign.center)),
+
+          // Alerta si urgente
+          if (alerta == true)
+            Container(
+              width: double.infinity, padding: const EdgeInsets.all(14),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.red, width: 2)),
+              child: Row(children: [
+                const Text("🚨", style: TextStyle(fontSize: 24)),
+                const SizedBox(width: 10),
+                Expanded(child: Text(L.get('vet_alert_msg'),
+                  style: _nunito(13, Colors.red, weight: FontWeight.w800))),
+              ])),
+
+          // Estado emocional principal
+          Container(
+            width: double.infinity, padding: const EdgeInsets.all(20),
+            decoration: kCardDeco(border: accentColor.withOpacity(0.3)),
+            child: Column(children: [
+              Text(emoji, style: const TextStyle(fontSize: 52)),
+              const SizedBox(height: 12),
+              Text(estado,
+                style: _nunito(22, accentColor, weight: FontWeight.w900)),
+              const SizedBox(height: 8),
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                _chip(tipo, accentColor),
+                const SizedBox(width: 8),
+                _chip(intensidad, kMuted),
+                const SizedBox(width: 8),
+                _chip(urgencia, urgencia == "Normal" ? kGreen : kCoral),
+              ]),
+            ])),
+
+          const SizedBox(height: 12),
+
+          // Interpretación
+          Container(
+            width: double.infinity, padding: const EdgeInsets.all(16),
+            decoration: kCardDeco(border: kPurple.withOpacity(0.2)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text("🧠 ${L.get('interpretation')}",
+                style: _nunito(14, kPurple, weight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              kBody(interp, size: 13),
+            ])),
+
+          if (causas.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity, padding: const EdgeInsets.all(16),
+              decoration: kCardDeco(border: kCoral.withOpacity(0.2)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text("⚠️ ${L.get('possible_causes')}",
+                  style: _nunito(14, kCoral, weight: FontWeight.w800)),
+                const SizedBox(height: 8),
+                ...causas.map((e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(children: [
+                    const Text("• ", style: TextStyle(color: kCoral, fontWeight: FontWeight.bold)),
+                    Expanded(child: kBody(e.toString(), size: 13)),
+                  ]))),
+              ])),
+          ],
+
+          const SizedBox(height: 12),
+
+          // Recomendación
+          Container(
+            width: double.infinity, padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [
+                kYellow.withOpacity(0.15), kCoral.withOpacity(0.08)]),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: kYellow.withOpacity(0.4))),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text("💡", style: TextStyle(fontSize: 20)),
+              const SizedBox(width: 10),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  kTitle(L.get('what_to_do'), size: 13),
+                  const SizedBox(height: 4),
+                  kBody(recom, size: 13),
+                ])),
+            ])),
+
+          if (curiosidad.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity, padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: kTurquoise.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: kTurquoise.withOpacity(0.3))),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text("🐱", style: TextStyle(fontSize: 20)),
+                const SizedBox(width: 10),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    kTitle(L.get('did_you_know'), size: 13),
+                    const SizedBox(height: 4),
+                    kBody(curiosidad, size: 13),
+                  ])),
+              ])),
+          ],
+
+          const SizedBox(height: 16),
+
+          // Botón clínicas
+          GestureDetector(
+            onTap: () async {
+              final uri = Uri.parse(
+                "https://www.google.com/maps/search/clinica+veterinaria+cerca");
+              if (await canLaunchUrl(uri))
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+            },
+            child: Container(
+              width: double.infinity, padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: kCoral.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: kCoral.withOpacity(0.3))),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.local_hospital_rounded, color: kCoral, size: 22),
+                const SizedBox(width: 10),
+                Text(L.get('vet_clinics'),
+                  style: _nunito(14, kCoral, weight: FontWeight.w700)),
+              ]))),
+
+          const SizedBox(height: 12),
+          kOutlineBtn(L.get('back_home'),
+            () => Navigator.of(context).popUntil((r) => r.isFirst),
+            color: kPurple),
+          const SizedBox(height: 20),
+        ]),
+      )),
+    );
+  }
+
+  Widget _chip(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.15),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: color.withOpacity(0.5))),
+    child: Text(text, style: _nunito(11, color, weight: FontWeight.w700)));
 }
 
 // ════════════════════════════════════════════════════════════════
