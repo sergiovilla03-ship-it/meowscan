@@ -316,8 +316,8 @@ Widget kTitle(String t, {double size = 24, Color color = kText}) =>
   Text(t, style: GoogleFonts.nunito(
       fontSize: size, color: color, fontWeight: FontWeight.w800));
 
-Widget kBody(String t, {double size = 14, Color color = kText}) =>
-  Text(t, style: _nunito(size, color));
+Widget kBody(String t, {double size = 14, Color color = kText, TextAlign align = TextAlign.start}) =>
+  Text(t, style: _nunito(size, color), textAlign: align);
 
 Widget kLabel(String t) => Text(t.toUpperCase(),
   style: _nunito(11, kMuted, weight: FontWeight.w700));
