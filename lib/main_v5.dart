@@ -3164,6 +3164,7 @@ class _MedicoScanBaseState extends State<_MedicoScanBase> {
   }
 
   void _start() {
+    _startTime = DateTime.now().millisecondsSinceEpoch;
     setState(() { _scanning = true; _secs = widget.duracion; _frames = 0; _last = null; });
     _scanTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) => _capture());
     _cdTimer   = Timer.periodic(const Duration(seconds: 1), (t) {
@@ -3172,7 +3173,10 @@ class _MedicoScanBaseState extends State<_MedicoScanBase> {
     });
   }
 
-  Future<void> _capture() async {
+  String get _sessionId => "${widget.cat.id}_${widget.endpoint}_${_startTime}";
+  int _startTime = 0;
+
+  Future<void> _capture({bool finalizar = false}) async {
     if (_cam == null || !_cam!.value.isInitialized || _sending) return;
     setState(() => _sending = true);
     try {
@@ -3181,25 +3185,52 @@ class _MedicoScanBaseState extends State<_MedicoScanBase> {
       final ip    = widget.serverIp;
       final proto = ip.contains("onrender") || ip.contains("trycloudflare") ? "https" : "http";
       final port  = ip.contains("onrender") || ip.contains("trycloudflare") ? "" : ":8000";
-      final uri   = Uri.parse("$proto://$ip$port/${widget.endpoint}");
-      final req   = http.MultipartRequest("POST", uri)
+      // Use new session-based endpoints
+      final endpointBase = widget.endpoint == "analizar_respiracion"
+          ? "respiracion/frame"
+          : "espasmos/frame";
+      final uri = Uri.parse("$proto://$ip$port/$endpointBase"
+          "?session_id=$_sessionId&finalizar=$finalizar");
+      final req = http.MultipartRequest("POST", uri)
         ..files.add(http.MultipartFile.fromBytes("file", bytes, filename: "f.jpg"));
-      final s   = await req.send().timeout(const Duration(seconds: 10));
+      final s   = await req.send().timeout(const Duration(seconds: 15));
       final res = await http.Response.fromStream(s);
       if (res.statusCode == 200 && mounted) {
         final data = json.decode(res.body);
-        if (data["mascota_detectada"] == true)
-          setState(() { _last = data; _frames++; });
+        // Frame parcial: actualizar preview
+        if (!finalizar) {
+          final rpm = data["rpm_parcial"];
+          final niv = data["nivel"];
+          if (rpm != null && niv != null && niv != "Calculando") {
+            setState(() {
+              _last = {
+                "mascota_detectada": true,
+                "nivel": niv,
+                "respiraciones_por_minuto": rpm,
+                "intensidad": data["intensidad"] ?? niv,
+              };
+              _frames++;
+            });
+          } else if (data["espasmo_detectado"] != null) {
+            setState(() { _last = data; _frames++; });
+          }
+        } else {
+          // Resultado final
+          setState(() { _last = data; });
+        }
       }
     } catch (_) {} finally {
       if (mounted) setState(() => _sending = false);
     }
   }
 
-  void _finish() {
+  void _finish() async {
     _scanTimer?.cancel(); _cdTimer?.cancel();
-    setState(() => _scanning = false);
-    if (_last != null) {
+    setState(() { _scanning = false; _sending = true; });
+    // Enviar último frame con finalizar=true para resultado final
+    await _capture(finalizar: true);
+    setState(() => _sending = false);
+    if (_last != null && mounted) {
       Navigator.of(context).pushReplacement(MaterialPageRoute(
         builder: (_) => MedicoResultScreen(
           resultado: _last!, titulo: widget.titulo,
@@ -3483,6 +3514,14 @@ class MedicoResultScreen extends StatelessWidget {
                 ],
                 const SizedBox(height: 8),
                 _fila("🔍 Observaciones", obs, accentColor),
+                if (resultado["metodo"] != null) ...[
+                  const SizedBox(height: 6),
+                  _fila("⚙️ Método", resultado["metodo"]!, accentColor),
+                ],
+                if (resultado["total_frames"] != null) ...[
+                  const SizedBox(height: 6),
+                  _fila("📸 Frames", "${resultado["total_frames"]} analizados", accentColor),
+                ],
               ]),
             ),
 
@@ -3600,23 +3639,15 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
   Future<void> _cargar() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final scansGato = widget.user.scans
+      final escaneos = widget.user.scans
           .where((s) => s.catId == widget.cat.id)
+          .map((s) => s.resultado)
           .toList();
-      
-      const minScans = 15;
-
-      if (scansGato.length < minScans) {
+      if (escaneos.length < 2) {
         setState(() { _loading = false;
-          _error = "historia_insuficiente:${scansGato.length}"; });
+          _error = "Necesitas al menos 2 escaneos para generar la historia médica. ¡Escanea más a ${widget.cat.name}!"; });
         return;
       }
-
-      // Send full scan data with dates for better AI analysis
-      final escaneos = scansGato.map((s) => {
-        ...s.resultado,
-        "fecha": s.date.toIso8601String(),
-      }).toList();
       final ip    = widget.serverIp;
       final proto = ip.contains("onrender") || ip.contains("trycloudflare") ? "https" : "http";
       final port  = ip.contains("onrender") || ip.contains("trycloudflare") ? "" : ":8000";
@@ -3668,63 +3699,16 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
             : _error != null
               ? Center(child: Padding(
                   padding: const EdgeInsets.all(32),
-                  child: _error!.startsWith("historia_insuficiente:")
-                    ? _buildInsuficiente(int.parse(_error!.split(":")[1]))
-                    : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        const Text("⚠️", style: TextStyle(fontSize: 64)),
-                        const SizedBox(height: 16),
-                        Text("Error al cargar historia médica.\nVerifica tu conexión.",
-                          textAlign: TextAlign.center, style: _nunito(15, kMuted)),
-                        const SizedBox(height: 16),
-                        TextButton(onPressed: _cargar,
-                          child: Text("Reintentar",
-                            style: _nunito(14, kPurple, weight: FontWeight.w700))),
-                      ])))
+                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    const Text("📋", style: TextStyle(fontSize: 64)),
+                    const SizedBox(height: 16),
+                    Text(_error!, textAlign: TextAlign.center,
+                      style: _nunito(15, kMuted)),
+                  ])))
               : _buildHistoria()),
         ]),
       ),
     );
-  }
-
-  Widget _buildInsuficiente(int actual) {
-    const minScans = 15;
-    final faltan = minScans - actual;
-    final progreso = actual / minScans;
-    return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      const Text("🩺", style: TextStyle(fontSize: 64)),
-      const SizedBox(height: 20),
-      Text("Historia Médica en construcción",
-        style: _nunito(18, kText, weight: FontWeight.w900),
-        textAlign: TextAlign.center),
-      const SizedBox(height: 12),
-      Text("El Dr. MeowScan necesita al menos $minScans escaneos para generar un diagnóstico clínico confiable.",
-        style: _nunito(14, kMuted), textAlign: TextAlign.center),
-      const SizedBox(height: 24),
-      Stack(alignment: Alignment.center, children: [
-        SizedBox(width: 130, height: 130,
-          child: CircularProgressIndicator(
-            value: progreso, strokeWidth: 10,
-            backgroundColor: kBorder,
-            valueColor: const AlwaysStoppedAnimation<Color>(kTurquoise),
-            strokeCap: StrokeCap.round)),
-        Column(children: [
-          Text("$actual", style: _nunito(40, kTurquoise, weight: FontWeight.w900)),
-          Text("/ $minScans", style: _nunito(13, kMuted)),
-        ]),
-      ]),
-      const SizedBox(height: 16),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        decoration: BoxDecoration(
-          color: kTurquoise.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: kTurquoise.withOpacity(0.3))),
-        child: Text("Faltan $faltan escaneos más 🐾",
-          style: _nunito(14, kTurquoise, weight: FontWeight.w700))),
-      const SizedBox(height: 20),
-      kBody("Cada escaneo aporta datos valiosos sobre la salud de tu mascota. ¡Sigue escaneando regularmente!",
-        color: kMuted, size: 13, align: TextAlign.center),
-    ]);
   }
 
   Widget _buildHistoria() {
@@ -3732,7 +3716,7 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
     final score     = h["score_salud"] ?? 0;
     final tendencia = h["tendencia"] ?? "Estable";
     final tColor    = h["tendencia_color"] ?? "#52C97A";
-    final resumen   = h["resumen_clinico"] ?? h["resumen"] ?? "";
+    final resumen   = h["resumen"] ?? "";
     final alertas   = (h["alertas_activas"] as List?) ?? [];
     final prediccs  = (h["predicciones"] as List?) ?? [];
     final recomends = (h["recomendaciones"] as List?) ?? [];
@@ -3868,79 +3852,6 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
                 ]))).toList())),
         ],
 
-        // Visita al veterinario
-        if (h["visita_veterinario"] != null) ...[
-          const SizedBox(height: 16),
-          Builder(builder: (_) {
-            final v = h["visita_veterinario"] as Map;
-            final urg = v["urgencia"] ?? "Revisión rutinaria";
-            final urgColorStr = v["urgencia_color"] ?? "#52C97A";
-            Color urgColor;
-            try { urgColor = Color(int.parse(urgColorStr.replaceFirst("#","0xFF"))); }
-            catch (_) { urgColor = kGreen; }
-            final motivo = v["motivo"] ?? "";
-            final estudios = (v["estudios_sugeridos"] as List?) ?? [];
-            return Container(
-              width: double.infinity, padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: urgColor.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: urgColor, width: 2)),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  const Icon(Icons.local_hospital_rounded, size: 22),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text("Visita al veterinario",
-                    style: _nunito(15, kText, weight: FontWeight.w800))),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: urgColor.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: urgColor)),
-                    child: Text(urg, style: _nunito(11, urgColor, weight: FontWeight.w800))),
-                ]),
-                const SizedBox(height: 8),
-                kBody(motivo, size: 13),
-                if (estudios.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text("Estudios sugeridos:", style: _nunito(12, kMuted)),
-                  const SizedBox(height: 4),
-                  ...estudios.map((e) => Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
-                    child: Row(children: [
-                      const Icon(Icons.chevron_right, size: 16, color: kMuted),
-                      Expanded(child: kBody(e.toString(), size: 12)),
-                    ]))),
-                ],
-              ]));
-          }),
-        ],
-
-        // Diagnóstico preliminar
-        if (h["diagnostico_preliminar"] != null) ...[
-          const SizedBox(height: 16),
-          _seccion("🔬 Diagnóstico Preliminar", kPurple, kBody(
-            h["diagnostico_preliminar"].toString(), size: 13)),
-        ],
-
-        // Evolución temporal
-        if (h["evolucion_temporal"] != null) ...[
-          const SizedBox(height: 16),
-          _seccion("📈 Evolución temporal", kTurquoise, Builder(builder: (_) {
-            final ev = h["evolucion_temporal"] as Map;
-            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              _evRow("🟢 Primer escaneo", ev["primer_escaneo"] ?? ""),
-              const SizedBox(height: 8),
-              _evRow("🔵 Último escaneo", ev["ultimo_escaneo"] ?? ""),
-              if ((ev["cambios_notables"] ?? "").toString().isNotEmpty) ...[
-                const SizedBox(height: 8),
-                _evRow("⚡ Cambios notables", ev["cambios_notables"] ?? ""),
-              ],
-            ]);
-          })),
-        ],
-
         if (proxima.isNotEmpty) ...[
           const SizedBox(height: 16),
           Container(
@@ -3955,7 +3866,7 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
               Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  kTitle("Próximo escaneo en MeowScan", size: 13),
+                  kTitle("Próxima revisión", size: 13),
                   const SizedBox(height: 2),
                   kBody(proxima, size: 13),
                 ])),
@@ -3986,13 +3897,6 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
       ]),
     );
   }
-
-  Widget _evRow(String label, String value) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: _nunito(12, kMuted)),
-      const SizedBox(width: 8),
-      Expanded(child: kBody(value, size: 12)),
-    ]);
 
   Widget _seccion(String titulo, Color color, Widget child) => Container(
     width: double.infinity, padding: const EdgeInsets.all(16),
