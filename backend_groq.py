@@ -34,7 +34,8 @@ HOST      = "0.0.0.0"
 PORT      = 8000
 GROQ_KEY      = os.environ.get("GROQ_API_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-genai.configure(api_key=GEMINI_API_KEY, transport="rest")
+import google.api_core.gapic_v1.client_info as client_info
+genai.configure(api_key=GEMINI_API_KEY, client_options={"api_endpoint": "generativelanguage.googleapis.com"})
 
 # ── Seguridad ─────────────────────────────────────────────────
 # API Key que la app envía en cada request
@@ -949,6 +950,11 @@ async def startup():
     print("\n🚀 Iniciando MeowScan API v3.1 con Groq Vision...")
     motor = MotorGroq()
     print("✅ Servidor listo!\n")
+try:
+    modelos = [m.name for m in genai.list_models() if "generateContent" in m.supported_generation_methods]
+    print(f"🤖 Modelos Gemini disponibles: {modelos}")
+except Exception as e:
+    print(f"⚠️ Modelos no listados: {e}")
 
 @app.get("/perfil")
 def perfil():
@@ -1123,7 +1129,7 @@ async def analizar_video_respiracion(file: UploadFile = File(...)):
             raise ValueError("Gemini no pudo procesar el video")
 
         print("🤖 Analizando con Gemini...")
-        model    = genai.GenerativeModel("models/gemini-1.5-flash-001")
+        model    = genai.GenerativeModel("gemini-1.5-pro")
         response = model.generate_content([video_file, PROMPT_VIDEO_RESPIRACION])
         print(f"✅ Respuesta recibida: {response.text[:100]}")
 
@@ -1183,7 +1189,7 @@ async def analizar_video_espasmos(file: UploadFile = File(...)):
         if video_file.state.name == "FAILED":
             raise ValueError("Gemini no pudo procesar el video")
 
-        model    = genai.GenerativeModel("models/gemini-1.5-flash-001")
+        model    = genai.GenerativeModel("gemini-1.5-pro")
         response = model.generate_content([video_file, PROMPT_VIDEO_ESPASMOS])
         print(f"✅ Espasmos respuesta: {response.text[:100]}")
 
