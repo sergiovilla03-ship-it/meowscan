@@ -7,3 +7,4 @@ python-multipart
 requests
 scipy
 Pillow
+google-generativeai

@@ -12,22 +12,60 @@ import base64
 import time
 import os
 import json
+import tempfile
 import urllib.request
 from io import BytesIO
 from typing import List, Dict, Any, Optional
+import google.generativeai as genai
 
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Depends
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from PIL import Image
+from collections import defaultdict
 import uvicorn
+import time
 from groq import Groq
 
 # ── Configuración ─────────────────────────────────────────────
 HOST      = "0.0.0.0"
 PORT      = 8000
-GROQ_KEY  = os.environ.get("GROQ_API_KEY", "")
+GROQ_KEY      = os.environ.get("GROQ_API_KEY", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+genai.configure(api_key=GEMINI_API_KEY)
+
+# ── Seguridad ─────────────────────────────────────────────────
+# API Key que la app envía en cada request
+MEOWSCAN_API_KEY = os.environ.get("MEOWSCAN_API_KEY", "meowscan-secret-2024")
+
+# Rate limiting: max requests por IP por ventana de tiempo
+_rate_store: dict = defaultdict(list)
+RATE_LIMIT_REQUESTS = 60   # max 60 requests
+RATE_LIMIT_WINDOW   = 60   # por minuto
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+def verify_api_key(key: str = Depends(api_key_header)):
+    """Verifica que el request viene de la app MeowScan."""
+    if key != MEOWSCAN_API_KEY:
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized - Invalid API Key")
+    return key
+
+def check_rate_limit(request: Request):
+    """Max 60 requests/min por IP."""
+    ip  = request.client.host if request.client else "unknown"
+    now = time.time()
+    # Clean old entries
+    _rate_store[ip] = [t for t in _rate_store[ip] if now - t < RATE_LIMIT_WINDOW]
+    if len(_rate_store[ip]) >= RATE_LIMIT_REQUESTS:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Please slow down.")
+    _rate_store[ip].append(now)
 
 # ── Cliente Groq ──────────────────────────────────────────────
 groq_client = Groq(api_key=GROQ_KEY)
@@ -876,10 +914,34 @@ from fastapi.responses import FileResponse
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"],          # Mobile apps don't have a fixed origin
+    allow_methods=["POST", "GET"],
+    allow_headers=["Content-Type", "X-API-Key"],
 )
+
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    """Block suspicious requests and add security headers."""
+    # Block common attack paths
+    path = request.url.path.lower()
+    blocked = [".php", ".asp", ".env", "wp-admin", "phpmyadmin",
+               "xmlrpc", ".git", "eval(", "<script"]
+    if any(b in path for b in blocked):
+        return JSONResponse(status_code=404, content={"detail": "Not found"})
+    response = await call_next(request)
+    # Security headers
+    response.headers["X-Content-Type-Options"]  = "nosniff"
+    response.headers["X-Frame-Options"]         = "DENY"
+    response.headers["X-XSS-Protection"]        = "1; mode=block"
+    response.headers["Referrer-Policy"]          = "no-referrer"
+    return response
+
+
+@app.get("/")
+@app.get("/health")
+async def health():
+    """Health check - no auth required (for UptimeRobot)."""
+    return {"status": "ok", "service": "MeowScan API", "version": "4.1"}
 
 @app.on_event("startup")
 async def startup():
@@ -994,6 +1056,149 @@ async def historia_medica(req: HistoriaRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return JSONResponse(content=resultado)
+
+
+# ══════════════════════════════════════════════════════════════
+# 🎥 GEMINI VIDEO ENDPOINTS — Respiración y Espasmos
+# ══════════════════════════════════════════════════════════════
+
+PROMPT_VIDEO_RESPIRACION = """
+Eres un veterinario experto analizando un video de la respiración de una mascota (gato o perro).
+Analiza el video y responde SOLO con JSON válido con esta estructura exacta:
+{
+  "frecuencia_respiratoria": "normal|elevada|baja|muy_elevada",
+  "respiraciones_por_minuto": número estimado,
+  "patron": "descripción del patrón respiratorio observado",
+  "signos_alarma": ["lista de signos preocupantes observados"],
+  "conclusion": "evaluación general de la respiración",
+  "recomendacion": "qué debe hacer el dueño",
+  "urgencia": "normal|observar|veterinario_pronto|emergencia"
+}
+Sé preciso y claro. Si no puedes determinar algo, indícalo en el campo correspondiente.
+"""
+
+PROMPT_VIDEO_ESPASMOS = """
+Eres un veterinario experto analizando un video de una mascota (gato o perro) buscando espasmos, temblores o movimientos anormales.
+Analiza el video y responde SOLO con JSON válido con esta estructura exacta:
+{
+  "espasmos_detectados": true|false,
+  "tipo": "ninguno|temblor_leve|espasmo_muscular|convulsion|movimiento_involuntario",
+  "frecuencia": "descripción de cuántas veces ocurre",
+  "zona_afectada": "descripción de qué parte del cuerpo",
+  "intensidad": "leve|moderada|severa|no_aplica",
+  "posibles_causas": ["lista de posibles causas"],
+  "conclusion": "evaluación general",
+  "recomendacion": "qué debe hacer el dueño",
+  "urgencia": "normal|observar|veterinario_pronto|emergencia"
+}
+Sé preciso. Si no detectas espasmos, indícalo claramente.
+"""
+
+@app.post("/analizar_video_respiracion")
+async def analizar_video_respiracion(file: UploadFile = File(...)):
+    """Analiza video de respiración con Gemini 1.5 Flash"""
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="Gemini API key no configurada")
+    try:
+        # Save video to temp file
+        contenido = await file.read()
+        suffix = ".mp4"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(contenido)
+            tmp_path = tmp.name
+
+        # Upload to Gemini Files API
+        video_file = genai.upload_file(tmp_path, mime_type="video/mp4")
+
+        # Wait for processing
+        import time as _time
+        while video_file.state.name == "PROCESSING":
+            _time.sleep(2)
+            video_file = genai.get_file(video_file.name)
+
+        if video_file.state.name == "FAILED":
+            raise ValueError("Gemini no pudo procesar el video")
+
+        # Analyze with Gemini
+        model    = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content([video_file, PROMPT_VIDEO_RESPIRACION])
+
+        # Clean up
+        os.unlink(tmp_path)
+        genai.delete_file(video_file.name)
+
+        # Parse JSON
+        text = response.text.strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        resultado = json.loads(text.strip())
+        return JSONResponse(content=resultado)
+
+    except json.JSONDecodeError:
+        return JSONResponse(content={
+            "frecuencia_respiratoria": "indeterminada",
+            "respiraciones_por_minuto": 0,
+            "patron": response.text[:200],
+            "signos_alarma": [],
+            "conclusion": "No se pudo procesar el análisis",
+            "recomendacion": "Consulta con un veterinario",
+            "urgencia": "observar"
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/analizar_video_espasmos")
+async def analizar_video_espasmos(file: UploadFile = File(...)):
+    """Analiza video de espasmos con Gemini 1.5 Flash"""
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="Gemini API key no configurada")
+    try:
+        contenido = await file.read()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+            tmp.write(contenido)
+            tmp_path = tmp.name
+
+        video_file = genai.upload_file(tmp_path, mime_type="video/mp4")
+
+        import time as _time
+        while video_file.state.name == "PROCESSING":
+            _time.sleep(2)
+            video_file = genai.get_file(video_file.name)
+
+        if video_file.state.name == "FAILED":
+            raise ValueError("Gemini no pudo procesar el video")
+
+        model    = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content([video_file, PROMPT_VIDEO_ESPASMOS])
+
+        os.unlink(tmp_path)
+        genai.delete_file(video_file.name)
+
+        text = response.text.strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        resultado = json.loads(text.strip())
+        return JSONResponse(content=resultado)
+
+    except json.JSONDecodeError:
+        return JSONResponse(content={
+            "espasmos_detectados": False,
+            "tipo": "indeterminado",
+            "frecuencia": "no determinada",
+            "zona_afectada": "no determinada",
+            "intensidad": "no_aplica",
+            "posibles_causas": [],
+            "conclusion": "No se pudo procesar el análisis",
+            "recomendacion": "Consulta con un veterinario",
+            "urgencia": "observar"
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     print("=" * 55)
