@@ -1123,7 +1123,7 @@ async def analizar_video_respiracion(file: UploadFile = File(...)):
             raise ValueError("Gemini no pudo procesar el video")
 
         print("🤖 Analizando con Gemini...")
-        model    = genai.GenerativeModel("gemini-1.5-flash")
+        model    = genai.GenerativeModel("gemini-2.0-flash")
         response = model.generate_content([video_file, PROMPT_VIDEO_RESPIRACION])
         print(f"✅ Respuesta recibida: {response.text[:100]}")
 
@@ -1183,7 +1183,7 @@ async def analizar_video_espasmos(file: UploadFile = File(...)):
         if video_file.state.name == "FAILED":
             raise ValueError("Gemini no pudo procesar el video")
 
-        model    = genai.GenerativeModel("gemini-1.5-flash")
+        model    = genai.GenerativeModel("gemini-2.0-flash")
         response = model.generate_content([video_file, PROMPT_VIDEO_ESPASMOS])
         print(f"✅ Espasmos respuesta: {response.text[:100]}")
 
