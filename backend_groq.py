@@ -1099,55 +1099,63 @@ async def analizar_video_respiracion(file: UploadFile = File(...)):
     """Analiza video de respiración con Gemini 1.5 Flash"""
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Gemini API key no configurada")
+    tmp_path = None
     try:
-        # Save video to temp file
         contenido = await file.read()
-        suffix = ".mp4"
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        print(f"📹 Video recibido: {len(contenido)} bytes")
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
             tmp.write(contenido)
             tmp_path = tmp.name
+        print(f"📁 Guardado en: {tmp_path}")
 
-        # Upload to Gemini Files API
-        video_file = genai.upload_file(tmp_path, mime_type="video/mp4")
-
-        # Wait for processing
         import time as _time
+        print("⬆️ Subiendo a Gemini Files API...")
+        video_file = genai.upload_file(tmp_path, mime_type="video/mp4")
+        print(f"✅ Subido: {video_file.name} estado={video_file.state.name}")
+
         while video_file.state.name == "PROCESSING":
             _time.sleep(2)
             video_file = genai.get_file(video_file.name)
+            print(f"⏳ Procesando... estado={video_file.state.name}")
 
         if video_file.state.name == "FAILED":
             raise ValueError("Gemini no pudo procesar el video")
 
-        # Analyze with Gemini
+        print("🤖 Analizando con Gemini...")
         model    = genai.GenerativeModel("gemini-1.5-flash")
         response = model.generate_content([video_file, PROMPT_VIDEO_RESPIRACION])
+        print(f"✅ Respuesta recibida: {response.text[:100]}")
 
-        # Clean up
-        os.unlink(tmp_path)
-        genai.delete_file(video_file.name)
+        try: genai.delete_file(video_file.name)
+        except: pass
+        try: os.unlink(tmp_path)
+        except: pass
 
-        # Parse JSON
         text = response.text.strip()
-        if text.startswith("```"):
+        if "```" in text:
             text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
+            if text.startswith("json"): text = text[4:]
         resultado = json.loads(text.strip())
         return JSONResponse(content=resultado)
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"❌ JSON parse error: {e}")
         return JSONResponse(content={
             "frecuencia_respiratoria": "indeterminada",
             "respiraciones_por_minuto": 0,
-            "patron": response.text[:200],
+            "patron": "No se pudo parsear la respuesta",
             "signos_alarma": [],
-            "conclusion": "No se pudo procesar el análisis",
-            "recomendacion": "Consulta con un veterinario",
+            "conclusion": "Análisis incompleto",
+            "recomendacion": "Intenta de nuevo",
             "urgencia": "observar"
         })
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ ERROR analizar_video_respiracion: {type(e).__name__}: {e}")
+        if tmp_path:
+            try: os.unlink(tmp_path)
+            except: pass
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
 
 
 @app.post("/analizar_video_espasmos")
@@ -1155,15 +1163,19 @@ async def analizar_video_espasmos(file: UploadFile = File(...)):
     """Analiza video de espasmos con Gemini 1.5 Flash"""
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Gemini API key no configurada")
+    tmp_path = None
     try:
         contenido = await file.read()
+        print(f"📹 Video espasmos recibido: {len(contenido)} bytes")
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
             tmp.write(contenido)
             tmp_path = tmp.name
 
-        video_file = genai.upload_file(tmp_path, mime_type="video/mp4")
-
         import time as _time
+        video_file = genai.upload_file(tmp_path, mime_type="video/mp4")
+        print(f"✅ Subido: {video_file.name}")
+
         while video_file.state.name == "PROCESSING":
             _time.sleep(2)
             video_file = genai.get_file(video_file.name)
@@ -1173,19 +1185,22 @@ async def analizar_video_espasmos(file: UploadFile = File(...)):
 
         model    = genai.GenerativeModel("gemini-1.5-flash")
         response = model.generate_content([video_file, PROMPT_VIDEO_ESPASMOS])
+        print(f"✅ Espasmos respuesta: {response.text[:100]}")
 
-        os.unlink(tmp_path)
-        genai.delete_file(video_file.name)
+        try: genai.delete_file(video_file.name)
+        except: pass
+        try: os.unlink(tmp_path)
+        except: pass
 
         text = response.text.strip()
-        if text.startswith("```"):
+        if "```" in text:
             text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
+            if text.startswith("json"): text = text[4:]
         resultado = json.loads(text.strip())
         return JSONResponse(content=resultado)
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"❌ JSON parse error espasmos: {e}")
         return JSONResponse(content={
             "espasmos_detectados": False,
             "tipo": "indeterminado",
@@ -1193,12 +1208,16 @@ async def analizar_video_espasmos(file: UploadFile = File(...)):
             "zona_afectada": "no determinada",
             "intensidad": "no_aplica",
             "posibles_causas": [],
-            "conclusion": "No se pudo procesar el análisis",
-            "recomendacion": "Consulta con un veterinario",
+            "conclusion": "Análisis incompleto",
+            "recomendacion": "Intenta de nuevo",
             "urgencia": "observar"
         })
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ ERROR analizar_video_espasmos: {type(e).__name__}: {e}")
+        if tmp_path:
+            try: os.unlink(tmp_path)
+            except: pass
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
 
 if __name__ == "__main__":
     print("=" * 55)
