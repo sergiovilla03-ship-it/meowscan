@@ -34,7 +34,7 @@ HOST      = "0.0.0.0"
 PORT      = 8000
 GROQ_KEY      = os.environ.get("GROQ_API_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-genai.configure(api_key=GEMINI_API_KEY)
+genai.configure(api_key=GEMINI_API_KEY, transport="rest")
 
 # ── Seguridad ─────────────────────────────────────────────────
 # API Key que la app envía en cada request
@@ -1123,7 +1123,7 @@ async def analizar_video_respiracion(file: UploadFile = File(...)):
             raise ValueError("Gemini no pudo procesar el video")
 
         print("🤖 Analizando con Gemini...")
-        model    = genai.GenerativeModel("gemini-1.5-flash")
+        model    = genai.GenerativeModel("models/gemini-1.5-flash-001")
         response = model.generate_content([video_file, PROMPT_VIDEO_RESPIRACION])
         print(f"✅ Respuesta recibida: {response.text[:100]}")
 
@@ -1183,7 +1183,7 @@ async def analizar_video_espasmos(file: UploadFile = File(...)):
         if video_file.state.name == "FAILED":
             raise ValueError("Gemini no pudo procesar el video")
 
-        model    = genai.GenerativeModel("gemini-1.5-flash")
+        model    = genai.GenerativeModel("models/gemini-1.5-flash-001")
         response = model.generate_content([video_file, PROMPT_VIDEO_ESPASMOS])
         print(f"✅ Espasmos respuesta: {response.text[:100]}")
 
