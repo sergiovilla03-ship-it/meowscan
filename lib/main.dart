@@ -4011,9 +4011,8 @@ class _VideoScanBaseState extends State<_VideoScanBase> {
         final scan = ScanRecord(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           catId: widget.cat.id,
-          tipo: widget.endpoint,
-          fecha: DateTime.now(),
-          datos: data);
+          date: DateTime.now(),
+          resultado: data);
         widget.user.scans.add(scan);
         await StorageService.saveScans(widget.user.scans);
         setState(() { _result = data; _done = true; _analyzing = false; });
@@ -4191,16 +4190,11 @@ class _VideoScanBaseState extends State<_VideoScanBase> {
         // Details
         if (isResp) ...[
           _resultCard("🫁", L.lang == 'en' ? "Breathing rate" : "Frecuencia respiratoria",
-            "${r['respiraciones_por_minuto'] ?? '--'} rpm
-${r['frecuencia_respiratoria'] ?? ''}"),
+            "${r['respiraciones_por_minuto'] ?? '--'} rpm - ${r['frecuencia_respiratoria'] ?? ''}"),
           _resultCard("📊", L.lang == 'en' ? "Pattern" : "Patrón", r['patron'] ?? ''),
         ] else ...[
           _resultCard("🔍", L.lang == 'en' ? "Spasms detected" : "Espasmos detectados",
-            (r['espasmos_detectados'] == true
-              ? (L.lang == 'en' ? "Yes" : "Sí")
-              : (L.lang == 'en' ? "No" : "No")) +
-            "
-${r['tipo'] ?? ''} • ${r['intensidad'] ?? ''}"),
+            ((r['espasmos_detectados'] == true ? (L.lang == 'en' ? "Yes" : "Sí") : "No") + " - " + (r['tipo'] ?? '') + " - " + (r['intensidad'] ?? ''))),
           _resultCard("📍", L.lang == 'en' ? "Affected area" : "Zona afectada",
             r['zona_afectada'] ?? ''),
         ],
@@ -4216,8 +4210,7 @@ ${r['tipo'] ?? ''} • ${r['intensidad'] ?? ''}"),
             (isResp
               ? (r['signos_alarma'] as List? ?? [])
               : (r['posibles_causas'] as List? ?? []))
-              .map((e) => "• $e").join("
-")),
+              .map((e) => "• $e").join("\n")),
         ],
 
         _resultCard("💡", L.lang == 'en' ? "Recommendation" : "Recomendación",
