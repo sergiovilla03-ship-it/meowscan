@@ -756,22 +756,52 @@ class MotorGroq:
         # Build detailed history summary for the AI
         resumen_detallado = []
         for i, scan in enumerate(historial):
-            entrada = {
-                "escaneo_num": i + 1,
-                "fecha": scan.get("fecha", f"Escaneo {i+1}"),
-                "datos": scan
-            }
-            resumen_detallado.append(entrada)
+            datos = scan.get("datos", scan)
+            tipo = datos.get("tipo", scan.get("tipo", "general"))
+            fecha = scan.get("fecha", f"Escaneo {i+1}")[:10]  # Solo fecha, no hora
+            
+            # Extract key fields per scan type to avoid token overflow
+            resumen = {"n": i+1, "fecha": fecha, "tipo": tipo}
+            if tipo == "general":
+                resumen["raza"] = datos.get("raza", {}).get("raza", "-") if isinstance(datos.get("raza"), dict) else datos.get("raza", "-")
+                resumen["peso_kg"] = datos.get("peso", {}).get("peso_kg", "-") if isinstance(datos.get("peso"), dict) else "-"
+                resumen["condicion"] = datos.get("condicion_corporal", "-")
+                resumen["anomalias"] = datos.get("anomalias_detectadas", [])
+            elif tipo == "vomito":
+                resumen["color"] = datos.get("color_principal", "-")
+                resumen["urgencia"] = datos.get("urgencia", "-")
+                resumen["posibles_causas"] = datos.get("posibles_causas", [])
+            elif tipo in ("analizar_respiracion", "respiracion"):
+                resumen["rpm"] = datos.get("respiraciones_por_minuto", "-")
+                resumen["patron"] = datos.get("patron", "-")
+                resumen["urgencia"] = datos.get("urgencia", "-")
+                resumen["signos_alarma"] = datos.get("signos_alarma", [])
+            elif tipo in ("analizar_espasmos", "espasmos"):
+                resumen["zona"] = datos.get("zona_afectada", "-")
+                resumen["intensidad"] = datos.get("intensidad", "-")
+                resumen["tipo_espasmo"] = datos.get("tipo", "-")
+                resumen["urgencia"] = datos.get("urgencia", "-")
+            elif tipo in ("analizar_encias", "encias"):
+                resumen["color"] = datos.get("color_detectado", "-")
+                resumen["estado"] = datos.get("estado", "-")
+                resumen["urgencia"] = datos.get("urgencia", "-")
+            elif tipo == "maullido":
+                resumen["tipo_sonido"] = datos.get("tipo_sonido", "-")
+                resumen["estado_emocional"] = datos.get("estado_emocional", "-")
+                resumen["urgencia"] = datos.get("urgencia", "-")
+            
+            resumen["conclusion"] = str(datos.get("conclusion", ""))[:200]
+            resumen_detallado.append(resumen)
         
         resumen_json = json.dumps(resumen_detallado, ensure_ascii=False, indent=2)
         total = len(historial)
         
         prompt_con_datos = f"""{PROMPT_HISTORIA}
 
-HISTORIAL COMPLETO ({total} escaneos):
+HISTORIAL COMPLETO ({total} escaneos de TODOS los tipos - general, vomito, respiracion, espasmos, encias, maullido):
 {resumen_json}
 
-Recuerda: analiza TODOS los escaneos, busca patrones y tendencias, y genera un diagnóstico clínico profesional."""
+Analiza TODOS los escaneos, detecta patrones y tendencias entre los diferentes tipos, y genera un diagnóstico clínico profesional integral."""
 
         try:
             response = groq_client.chat.completions.create(
