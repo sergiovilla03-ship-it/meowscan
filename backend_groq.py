@@ -643,7 +643,7 @@ class MotorGroq:
         return json.loads(texto)
 
     # ── Analizar mascota ──────────────────────────────────────
-    def analizar_con_groq(self, img_bgr: np.ndarray) -> Dict[str, Any]:
+    def analizar_con_groq(self, img_bgr: np.ndarray, lang: str = "es") -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
         try:
             prompt = PROMPT_EN if lang == "en" else PROMPT_ES
@@ -656,7 +656,7 @@ class MotorGroq:
             return self._resultado_fallback()
 
     # ── Analizar vómito ───────────────────────────────────────
-    def analizar_vomito_con_groq(self, img_bgr: np.ndarray) -> Dict[str, Any]:
+    def analizar_vomito_con_groq(self, img_bgr: np.ndarray, lang: str = "es") -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
         try:
             prompt = PROMPT_VOMITO_EN if lang == "en" else PROMPT_VOMITO
@@ -707,7 +707,7 @@ class MotorGroq:
             raise ValueError("No se pudo decodificar la imagen")
 
         caras     = self.detectar_cara(img)
-        resultado = self.analizar_con_groq(img)
+        resultado = self.analizar_con_groq(img, lang=lang)
 
         if not resultado.get("mascota_detectada", False):
             return {
@@ -798,7 +798,7 @@ class MotorGroq:
         }
 
     # ── Analizar encías ──────────────────────────────────────
-    def analizar_encias_con_groq(self, img_bgr) -> Dict[str, Any]:
+    def analizar_encias_con_groq(self, img_bgr, lang: str = "es") -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
         try:
             prompt = PROMPT_ENCIAS_EN if lang == "en" else PROMPT_ENCIAS
@@ -812,7 +812,7 @@ class MotorGroq:
         img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         if img is None:
             raise ValueError("No se pudo decodificar la imagen")
-        resultado = self.analizar_encias_con_groq(img)
+        resultado = self.analizar_encias_con_groq(img, lang=lang)
         if not resultado.get("mascota_detectada", False) or            not resultado.get("encias_visibles", False):
             return {"mascota_detectada": False, "timestamp": time.time(),
                     "mensaje": "No se ven las encías. Levanta suavemente el labio de tu mascota y toma la foto."}
@@ -872,19 +872,21 @@ class MotorGroq:
             return {"sonido_detectado": False, "error": str(e)}
 
     # ── Analizar respiración ─────────────────────────────────
-    def analizar_respiracion_con_groq(self, img_bgr: np.ndarray) -> Dict[str, Any]:
+    def analizar_respiracion_con_groq(self, img_bgr: np.ndarray, lang: str = "es") -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
         try:
-            return self._llamar_gemini(img_b64, PROMPT_RESPIRACION, max_tokens=800)
+            prompt = PROMPT_RESPIRACION_EN if lang == "en" else PROMPT_RESPIRACION
+            return self._llamar_gemini(img_b64, prompt, max_tokens=800)
         except Exception as e:
             print(f"❌ Respiracion error: {e}")
             return {"mascota_detectada": False}
 
     # ── Analizar espasmos ─────────────────────────────────────
-    def analizar_espasmos_con_groq(self, img_bgr: np.ndarray) -> Dict[str, Any]:
+    def analizar_espasmos_con_groq(self, img_bgr: np.ndarray, lang: str = "es") -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
         try:
-            return self._llamar_gemini(img_b64, PROMPT_ESPASMOS, max_tokens=800)
+            prompt = PROMPT_ESPASMOS_EN if lang == "en" else PROMPT_ESPASMOS
+            return self._llamar_gemini(img_b64, prompt, max_tokens=800)
         except Exception as e:
             print(f"❌ Espasmos error: {e}")
             return {"mascota_detectada": False}
@@ -962,12 +964,12 @@ Analiza TODOS los escaneos, detecta patrones y tendencias entre los diferentes t
             return {"error": str(e)}
 
     # ── ANÁLISIS COMPLETO RESPIRACIÓN ────────────────────────
-    def analizar_frame_respiracion(self, img_bytes: bytes) -> Dict[str, Any]:
+    def analizar_frame_respiracion(self, img_bytes: bytes, lang: str = "es") -> Dict[str, Any]:
         arr = np.frombuffer(img_bytes, np.uint8)
         img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         if img is None:
             raise ValueError("No se pudo decodificar la imagen")
-        resultado = self.analizar_respiracion_con_groq(img)
+        resultado = self.analizar_respiracion_con_groq(img, lang=lang)
         if not resultado.get("mascota_detectada", False):
             return {"mascota_detectada": False, "timestamp": time.time(),
                     "mensaje": "No se detectó la mascota. Apunta al pecho del animal."}
@@ -997,12 +999,12 @@ Analiza TODOS los escaneos, detecta patrones y tendencias entre los diferentes t
         }
 
     # ── ANÁLISIS COMPLETO ESPASMOS ───────────────────────────
-    def analizar_frame_espasmos(self, img_bytes: bytes) -> Dict[str, Any]:
+    def analizar_frame_espasmos(self, img_bytes: bytes, lang: str = "es") -> Dict[str, Any]:
         arr = np.frombuffer(img_bytes, np.uint8)
         img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         if img is None:
             raise ValueError("No se pudo decodificar la imagen")
-        resultado = self.analizar_espasmos_con_groq(img)
+        resultado = self.analizar_espasmos_con_groq(img, lang=lang)
         if not resultado.get("mascota_detectada", False):
             return {"mascota_detectada": False, "timestamp": time.time(),
                     "mensaje": "No se detectó la mascota. Apunta a la espalda del animal."}
@@ -1037,7 +1039,7 @@ Analiza TODOS los escaneos, detecta patrones y tendencias entre los diferentes t
         if img is None:
             raise ValueError("No se pudo decodificar la imagen")
 
-        resultado = self.analizar_vomito_con_groq(img)
+        resultado = self.analizar_vomito_con_groq(img, lang=lang)
 
         if not resultado.get("vomito_detectado", False):
             return {
@@ -1162,23 +1164,23 @@ async def analizar_vomito(file: UploadFile = File(...), sesion_id: str = "defaul
 
 
 @app.post("/analizar_respiracion")
-async def analizar_respiracion(file: UploadFile = File(...)):
+async def analizar_respiracion(file: UploadFile = File(...), lang: str = Form("es")):
     if motor is None:
         raise HTTPException(status_code=503, detail="Motor no inicializado")
     contenido = await file.read()
     try:
-        resultado = motor.analizar_frame_respiracion(contenido)
+        resultado = motor.analizar_frame_respiracion(contenido, lang=lang)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return JSONResponse(content=resultado)
 
 @app.post("/analizar_espasmos")
-async def analizar_espasmos(file: UploadFile = File(...)):
+async def analizar_espasmos(file: UploadFile = File(...), lang: str = Form("es")):
     if motor is None:
         raise HTTPException(status_code=503, detail="Motor no inicializado")
     contenido = await file.read()
     try:
-        resultado = motor.analizar_frame_espasmos(contenido)
+        resultado = motor.analizar_frame_espasmos(contenido, lang=lang)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return JSONResponse(content=resultado)
