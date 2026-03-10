@@ -751,63 +751,93 @@ class MotorGroq:
         _, buf = cv2.imencode(".jpg", img_anotada, [cv2.IMWRITE_JPEG_QUALITY, 75])
         img_b64 = base64.b64encode(buf.tobytes()).decode()
 
-        raza_info  = resultado.get("raza", {})
-        peso_info  = resultado.get("peso", {})
-        color_info = resultado.get("color", {})
-        corp_info  = resultado.get("estado_corporal", {})
-        gesto_info = resultado.get("gesto", {})
-        orejas     = resultado.get("orejas", {})
-        salud_vis  = resultado.get("salud_visual", {})
+        # Normalizar: soporta estructura anidada (Groq) y plana (Gemini)
+        def _d(val): return val if isinstance(val, dict) else {}
+
+        raza_info  = _d(resultado.get("raza"))
+        peso_info  = _d(resultado.get("peso"))
+        color_info = _d(resultado.get("color"))
+        corp_info  = _d(resultado.get("estado_corporal"))
+        gesto_info = _d(resultado.get("gesto"))
+        orejas     = _d(resultado.get("orejas"))
+        salud_vis  = _d(resultado.get("salud_visual"))
+
+        # Fallbacks para campos planos que Gemini puede devolver
+        raza_nombre = (raza_info.get("nombre")
+                       or resultado.get("raza_probable")
+                       or resultado.get("raza") if not isinstance(resultado.get("raza"), dict) else None
+                       or "-")
+        especie = resultado.get("tipo") or resultado.get("especie") or "gato"
+        peso_kg = (peso_info.get("estimado_kg")
+                   or resultado.get("peso_estimado_kg") or 4.0)
+        peso_lb = (peso_info.get("estimado_lb")
+                   or resultado.get("peso_estimado_lb") or round(peso_kg * 2.205, 1))
+        color_p = (color_info.get("color_principal")
+                   or resultado.get("color_principal") or "-")
+        bcs_val = corp_info.get("bcs") or resultado.get("bcs") or 5
+        cond    = (corp_info.get("estado")
+                   or resultado.get("condicion_corporal")
+                   or resultado.get("estado_corporal") or "-")
+        ojos_v  = (salud_vis.get("ojos")
+                   or resultado.get("ojos") or "-")
+        pelaje_v= (salud_vis.get("pelaje")
+                   or resultado.get("pelaje") or "-")
+        obs_v   = (salud_vis.get("observaciones")
+                   or resultado.get("observaciones") or "-")
+        emocion = (gesto_info.get("emocion")
+                   or resultado.get("estado_emocional")
+                   or resultado.get("estado_general") or "Alerta")
+        estres  = gesto_info.get("nivel_estres") or 3
 
         return {
             "gato_detectado":    True,
             "mascota_detectada": True,
-            "tipo":              resultado.get("tipo", "gato"),
+            "tipo":              especie,
             "timestamp":         time.time(),
             "caras_detectadas":  len(caras),
             "imagen_anotada":    img_b64,
 
             "raza": {
-                "raza":        raza_info.get("nombre", "-"),
-                "confianza":   raza_info.get("confianza", 0),
+                "raza":        raza_nombre,
+                "confianza":   raza_info.get("confianza", 75),
                 "descripcion": raza_info.get("descripcion", ""),
-                "peso_base":   peso_info.get("estimado_kg", 4.5),
+                "peso_base":   peso_kg,
             },
             "peso": {
-                "peso_kg":       peso_info.get("estimado_kg", 0),
-                "peso_lb":       peso_info.get("estimado_lb", 0),
-                "rango":         f'{peso_info.get("rango_min_kg",0)}-{peso_info.get("rango_max_kg",0)} kg',
+                "peso_kg":       peso_kg,
+                "peso_lb":       peso_lb,
+                "rango":         f'{peso_info.get("rango_min_kg", round(peso_kg-0.5,1))}-{peso_info.get("rango_max_kg", round(peso_kg+0.5,1))} kg',
                 "area_relativa": 0,
                 "confianza":     peso_info.get("confianza", "Media"),
             },
             "color": {
-                "color_principal":     color_info.get("color_principal", "-"),
-                "colores_secundarios": color_info.get("colores_secundarios", []),
-                "patron":              color_info.get("patron", "-"),
+                "color_principal":     color_p,
+                "colores_secundarios": color_info.get("colores_secundarios", resultado.get("colores_secundarios", [])),
+                "patron":              color_info.get("patron", resultado.get("patron_pelaje", "-")),
                 "hex":                 color_info.get("hex_aproximado", "#888888"),
             },
             "estado_corporal": {
-                "bcs":            corp_info.get("bcs", 5),
+                "bcs":            bcs_val,
                 "bcs_max":        9,
-                "estado":         corp_info.get("estado", "-"),
-                "emoji":          corp_info.get("emoji", "🐱"),
+                "estado":         cond,
+                "emoji":          corp_info.get("emoji", "🐱" if "gat" in especie else "🐶"),
                 "color_hex":      corp_info.get("color_hex", "#52C97A"),
                 "salud_pct":      corp_info.get("salud_pct", 75),
-                "consejo":        corp_info.get("consejo", ""),
-                "alerta_peso":    corp_info.get("alerta_peso", False),
+                "consejo":        corp_info.get("consejo", resultado.get("consejo_salud", "")),
+                "alerta_peso":    corp_info.get("alerta_peso", bcs_val >= 6),
                 "mensaje_alerta": corp_info.get("mensaje_alerta", None),
             },
             "gesto": {
-                "nombre":        gesto_info.get("nombre", "-"),
-                "emocion":       gesto_info.get("emocion", "-"),
-                "descripcion":   gesto_info.get("descripcion", "-"),
-                "nivel_estres":  gesto_info.get("nivel_estres", 0),
-                "movimiento":    "alto" if gesto_info.get("nivel_estres", 0) > 5 else "bajo",
+                "nombre":        gesto_info.get("nombre", emocion),
+                "emocion":       emocion,
+                "descripcion":   gesto_info.get("descripcion", resultado.get("postura", "-")),
+                "nivel_estres":  estres,
+                "movimiento":    "alto" if estres > 5 else "bajo",
                 "cola_posicion": gesto_info.get("cola_posicion"),
                 "confianza":     90,
             },
             "orejas": {
-                "posicion":           orejas.get("posicion", "-"),
+                "posicion":           orejas.get("posicion", resultado.get("posicion_orejas", "-")),
                 "estado":             orejas.get("estado", "-"),
                 "significado":        orejas.get("significado", "-"),
                 "alerta":             orejas.get("alerta", False),
@@ -815,14 +845,14 @@ class MotorGroq:
                 "mensaje_veterinario":orejas.get("mensaje_veterinario", None),
             },
             "cola": {
-                "posicion":   resultado.get("cola", {}).get("posicion", "No visible"),
-                "significado":resultado.get("cola", {}).get("significado", "-"),
-                "visible":    resultado.get("cola", {}).get("visible", False),
+                "posicion":   _d(resultado.get("cola")).get("posicion", "No visible"),
+                "significado":_d(resultado.get("cola")).get("significado", "-"),
+                "visible":    _d(resultado.get("cola")).get("visible", False),
             },
             "salud_visual": {
-                "ojos":          salud_vis.get("ojos", "-"),
-                "pelaje":        salud_vis.get("pelaje", "-"),
-                "observaciones": salud_vis.get("observaciones", "-"),
+                "ojos":          ojos_v,
+                "pelaje":        pelaje_v,
+                "observaciones": obs_v,
             },
         }
 
