@@ -77,26 +77,68 @@ CASCADES_URL = {
 # ════════════════════════════════════════════════════════════════
 #  PROMPT MASCOTA — con énfasis en peso real y alertas
 # ════════════════════════════════════════════════════════════════
-PROMPT_ES = """Eres un veterinario experto con 30 años de experiencia en gatos y perros. Analiza la imagen y devuelve EXACTAMENTE este JSON, sin texto adicional, sin markdown, sin comillas de código:
+PROMPT_ES = """Eres un veterinario experto con 30 años de experiencia. Analiza esta imagen de mascota.
 
-{"mascota_detectada":true,"tipo":"gato","raza":{"nombre":"NOMBRE_RAZA_EXACTA","confianza":85,"descripcion":"DESCRIPCION_BREVE"},"peso":{"estimado_kg":4.2,"estimado_lb":9.3,"rango_min_kg":3.8,"rango_max_kg":4.8,"confianza":"Media"},"color":{"color_principal":"NARANJA","colores_secundarios":["BLANCO"],"patron":"Atigrado","hex_aproximado":"#FF8C42"},"estado_corporal":{"bcs":5,"estado":"Peso ideal","emoji":"🐱","color_hex":"#52C97A","salud_pct":80,"consejo":"CONSEJO_PERSONALIZADO","alerta_peso":false,"mensaje_alerta":null},"orejas":{"posicion":"Erguidas","estado":"Alerta","significado":"SIGNIFICADO","alerta":false,"alerta_veterinario":false,"mensaje_veterinario":null},"cola":{"posicion":"Alta","significado":"SIGNIFICADO_COLA","visible":true},"gesto":{"nombre":"Curioso 👀","emocion":"Curioso","descripcion":"DESCRIPCION_COMPORTAMIENTO","nivel_estres":2,"cola_posicion":null},"salud_visual":{"ojos":"DESCRIPCION_OJOS","pelaje":"DESCRIPCION_PELAJE","observaciones":"OBSERVACIONES_SALUD"}}
+RESPONDE ÚNICAMENTE con el siguiente JSON (sin markdown, sin texto extra, sin bloques de código):
+{
+  "mascota_detectada": true,
+  "tipo": "gato o perro",
+  "raza": {
+    "nombre": "raza específica (ej: Gato Doméstico Naranja Atigrado, Maine Coon, Siamés)",
+    "confianza": 85,
+    "descripcion": "descripción corta de la raza"
+  },
+  "peso": {
+    "estimado_kg": 4.2,
+    "estimado_lb": 9.3,
+    "rango_min_kg": 3.8,
+    "rango_max_kg": 4.8,
+    "confianza": "Media"
+  },
+  "color": {
+    "color_principal": "color real del pelaje",
+    "colores_secundarios": ["color2"],
+    "patron": "Sólido, Atigrado, Bicolor, Tricolor, Carey o Manchado",
+    "hex_aproximado": "#FF8C42"
+  },
+  "estado_corporal": {
+    "bcs": 5,
+    "estado": "Peso ideal",
+    "emoji": "🐱",
+    "color_hex": "#52C97A",
+    "salud_pct": 80,
+    "consejo": "consejo nutricional específico",
+    "alerta_peso": false,
+    "mensaje_alerta": null
+  },
+  "orejas": {
+    "posicion": "Erguidas",
+    "estado": "Alerta",
+    "significado": "qué indica esta posición",
+    "alerta": false,
+    "alerta_veterinario": false,
+    "mensaje_veterinario": null
+  },
+  "cola": {
+    "posicion": "Alta o No visible",
+    "significado": "qué indica",
+    "visible": true
+  },
+  "gesto": {
+    "nombre": "Curioso 👀",
+    "emocion": "Curioso",
+    "descripcion": "descripción del comportamiento",
+    "nivel_estres": 2,
+    "cola_posicion": null
+  },
+  "salud_visual": {
+    "ojos": "color y condición de los ojos",
+    "pelaje": "textura, brillo y condición del pelaje",
+    "observaciones": "observaciones de salud relevantes"
+  }
+}
 
-REGLAS OBLIGATORIAS:
-1. Reemplaza CADA campo en MAYUSCULAS con el valor REAL observado en la imagen
-2. raza.nombre: ESPECIFICO — "Gato Doméstico de Pelo Corto Naranja Atigrado", "Maine Coon", "Siamés" — NUNCA "No determinada" ni "Desconocida"
-3. color.color_principal: el color REAL del pelaje — naranja, negro, gris, blanco, marrón, crema, canela, dorado, etc
-4. color.patron: Sólido, Atigrado, Bicolor, Tricolor, Carey, Manchado o Punto — observa el pelaje real
-5. color.hex_aproximado: el código hex más cercano al color real del pelaje
-6. orejas.posicion: posición REAL observada — Erguidas, Hacia adelante, Hacia atrás, Aplastadas, Relajadas
-7. gesto.emocion: Feliz, Relajado, Curioso, Alerta, Asustado, Enojado, Juguetón o Somnoliento
-8. salud_visual.ojos: color de ojos, si están abiertos/entrecerrados, presencia de secreciones, brillo
-9. salud_visual.pelaje: textura (suave/áspero), brillo, limpieza, longitud (corto/largo/medio), condición
-10. BCS del 1-9: gato robusto/grande = 6+, gato delgado = 1-3, normal = 4-5
-11. alerta_peso: true si BCS >= 6
-12. NO uses null en campos de texto — usa "-" si no puedes determinarlo
-
-Si NO hay gato ni perro: {"mascota_detectada":false}
-Devuelve SOLO el JSON. Nada más."""
+Si no hay mascota: {"mascota_detectada": false}"""
 
 
 # ════════════════════════════════════════════════════════════════
@@ -290,24 +332,70 @@ Responde SOLO el JSON."""
 # 🌐 ENGLISH PROMPTS
 # ══════════════════════════════════════════════════════════════
 
-PROMPT_EN = """You are an expert veterinarian with 30 years of experience. Analyze the image and return EXACTLY this JSON structure, no extra text, no markdown, no code fences:
+PROMPT_EN = """You are an expert veterinarian with 30 years of experience. Analyze this pet image.
 
-{"mascota_detectada":true,"tipo":"cat","raza":{"nombre":"EXACT_SPECIFIC_BREED","confianza":85,"descripcion":"BRIEF_BREED_DESCRIPTION"},"peso":{"estimado_kg":4.2,"estimado_lb":9.3,"rango_min_kg":3.8,"rango_max_kg":4.8,"confianza":"Medium"},"color":{"color_principal":"ORANGE","colores_secundarios":["WHITE"],"patron":"Tabby","hex_aproximado":"#FF8C42"},"estado_corporal":{"bcs":5,"estado":"Ideal weight","emoji":"🐱","color_hex":"#52C97A","salud_pct":80,"consejo":"PERSONALIZED_DIET_ADVICE","alerta_peso":false,"mensaje_alerta":null},"orejas":{"posicion":"Upright","estado":"Alert","significado":"EAR_MEANING","alerta":false,"alerta_veterinario":false,"mensaje_veterinario":null},"cola":{"posicion":"High","significado":"TAIL_MEANING","visible":true},"gesto":{"nombre":"Curious 👀","emocion":"Curious","descripcion":"BEHAVIOR_DESCRIPTION","nivel_estres":2,"cola_posicion":null},"salud_visual":{"ojos":"EYE_COLOR_AND_CONDITION","pelaje":"COAT_TEXTURE_AND_CONDITION","observaciones":"HEALTH_OBSERVATIONS"}}
+RESPOND ONLY with the following JSON (no markdown, no extra text, no code blocks):
+{
+  "mascota_detectada": true,
+  "tipo": "cat or dog",
+  "raza": {
+    "nombre": "specific breed (e.g. Orange Tabby Domestic Shorthair, Maine Coon, Siamese)",
+    "confianza": 85,
+    "descripcion": "short breed description"
+  },
+  "peso": {
+    "estimado_kg": 4.2,
+    "estimado_lb": 9.3,
+    "rango_min_kg": 3.8,
+    "rango_max_kg": 4.8,
+    "confianza": "Medium"
+  },
+  "color": {
+    "color_principal": "real coat color",
+    "colores_secundarios": ["color2"],
+    "patron": "Solid, Tabby, Bicolor, Tricolor, Tortoiseshell or Spotted",
+    "hex_aproximado": "#FF8C42"
+  },
+  "estado_corporal": {
+    "bcs": 5,
+    "estado": "Ideal weight",
+    "emoji": "🐱",
+    "color_hex": "#52C97A",
+    "salud_pct": 80,
+    "consejo": "specific nutritional advice",
+    "alerta_peso": false,
+    "mensaje_alerta": null
+  },
+  "orejas": {
+    "posicion": "Upright",
+    "estado": "Alert",
+    "significado": "what this position indicates",
+    "alerta": false,
+    "alerta_veterinario": false,
+    "mensaje_veterinario": null
+  },
+  "cola": {
+    "posicion": "High or Not visible",
+    "significado": "what it indicates",
+    "visible": true
+  },
+  "gesto": {
+    "nombre": "Curious 👀",
+    "emocion": "Curious",
+    "descripcion": "behavior description",
+    "nivel_estres": 2,
+    "cola_posicion": null
+  },
+  "salud_visual": {
+    "ojos": "eye color and condition",
+    "pelaje": "coat texture, shine and condition",
+    "observaciones": "relevant health observations"
+  }
+}
 
-MANDATORY RULES:
-1. Replace EVERY UPPERCASE field with the REAL observed value from the image
-2. raza.nombre: SPECIFIC — "Orange Tabby Domestic Shorthair", "Maine Coon", "Siamese" — NEVER "Unknown" or "Undetermined"
-3. color.color_principal: the REAL coat color — orange, black, gray, white, brown, cream, golden, etc
-4. color.patron: Solid, Tabby, Bicolor, Tricolor, Tortoiseshell, Spotted or Pointed
-5. color.hex_aproximado: the closest hex code to the real coat color
-6. orejas.posicion: REAL observed position — Upright, Forward, Back, Flattened, Relaxed
-7. gesto.emocion: Happy, Relaxed, Curious, Alert, Scared, Angry, Playful or Drowsy
-8. salud_visual.ojos: eye color, open/half-closed, any discharge, brightness
-9. salud_visual.pelaje: texture, shine, cleanliness, length (short/long/medium), condition
-10. BCS 1-9: robust/large cat = 6+, thin cat = 1-3, normal = 4-5
+If no pet present: {"mascota_detectada": false}"""
 
-If NO cat or dog: {"mascota_detectada":false}
-Return ONLY the JSON. Nothing else."""
+
 
 PROMPT_VOMITO_EN = """Act as a veterinarian with 30 years of experience in small animal medicine.
 Analyze the vomit image and respond ONLY with valid JSON:
@@ -614,7 +702,7 @@ class MotorGroq:
         img_b64 = self._img_to_b64(img_bgr)
         try:
             prompt = PROMPT_EN if lang == "en" else PROMPT_ES
-            return self._llamar_gemini(img_b64, prompt)
+            return self._llamar_gemini(img_b64, prompt, max_tokens=4000)
         except json.JSONDecodeError as e:
             print(f"⚠️ JSON parse error: {e}")
             return self._resultado_fallback()
