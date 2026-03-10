@@ -489,7 +489,7 @@ class MotorGroq:
 
     def _llamar_groq(self, img_b64: str, prompt: str, max_tokens: int = 1500) -> dict:
         response = groq_client.chat.completions.create(
-            model="meta-llama/llama-4-maverick-17b-128e-instruct",
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
             messages=[{
                 "role": "user",
                 "content": [
@@ -715,7 +715,7 @@ class MotorGroq:
         try:
             prompt_completo = f"{PROMPT_MAULLIDO}\n\nSonidos capturados:\n{descripcion}"
             response = groq_client.chat.completions.create(
-                model="meta-llama/llama-4-maverick-17b-128e-instruct",
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
                 messages=[{"role": "user", "content": prompt_completo}],
                 max_tokens=1000,
                 temperature=0.2,
@@ -805,7 +805,7 @@ Analiza TODOS los escaneos, detecta patrones y tendencias entre los diferentes t
 
         try:
             response = groq_client.chat.completions.create(
-                model="meta-llama/llama-4-maverick-17b-128e-instruct",
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
                 messages=[{"role": "user", "content": prompt_con_datos}],
                 max_tokens=2000,
                 temperature=0.1,
@@ -996,7 +996,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "3.1", "ia_engine": "Groq Vision llama-4-maverick", "groq": True}
+    return {"status": "ok", "version": "3.1", "ia_engine": "Groq Vision llama-4-scout", "groq": True}
 
 @app.post("/analizar")
 async def analizar(file: UploadFile = File(...), sesion_id: str = "default"):
