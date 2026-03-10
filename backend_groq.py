@@ -77,89 +77,26 @@ CASCADES_URL = {
 # ════════════════════════════════════════════════════════════════
 #  PROMPT MASCOTA — con énfasis en peso real y alertas
 # ════════════════════════════════════════════════════════════════
-PROMPT_ES = """Eres un veterinario experto en animales de compañía con 30 años de experiencia en gatos y perros.
-Analiza esta imagen y responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones.
+PROMPT_ES = """Eres un veterinario experto con 30 años de experiencia en gatos y perros. Analiza la imagen y devuelve EXACTAMENTE este JSON, sin texto adicional, sin markdown, sin comillas de código:
 
-Primero determina si hay un gato o un perro en la imagen.
+{"mascota_detectada":true,"tipo":"gato","raza":{"nombre":"NOMBRE_RAZA_EXACTA","confianza":85,"descripcion":"DESCRIPCION_BREVE"},"peso":{"estimado_kg":4.2,"estimado_lb":9.3,"rango_min_kg":3.8,"rango_max_kg":4.8,"confianza":"Media"},"color":{"color_principal":"NARANJA","colores_secundarios":["BLANCO"],"patron":"Atigrado","hex_aproximado":"#FF8C42"},"estado_corporal":{"bcs":5,"estado":"Peso ideal","emoji":"🐱","color_hex":"#52C97A","salud_pct":80,"consejo":"CONSEJO_PERSONALIZADO","alerta_peso":false,"mensaje_alerta":null},"orejas":{"posicion":"Erguidas","estado":"Alerta","significado":"SIGNIFICADO","alerta":false,"alerta_veterinario":false,"mensaje_veterinario":null},"cola":{"posicion":"Alta","significado":"SIGNIFICADO_COLA","visible":true},"gesto":{"nombre":"Curioso 👀","emocion":"Curioso","descripcion":"DESCRIPCION_COMPORTAMIENTO","nivel_estres":2,"cola_posicion":null},"salud_visual":{"ojos":"DESCRIPCION_OJOS","pelaje":"DESCRIPCION_PELAJE","observaciones":"OBSERVACIONES_SALUD"}}
 
-INSTRUCCIONES CRÍTICAS PARA EL PESO Y ESTADO CORPORAL:
-- Sé MUY estricto al evaluar el estado corporal. La mayoría de mascotas domésticas tienen sobrepeso.
-- Un gato doméstico promedio saludable pesa entre 3.5 y 4.5 kg. Si se ve grande o redondo, probablemente tiene sobrepeso.
-- Un gato que pesa más de 5 kg casi siempre tiene sobrepeso u obesidad.
-- NO digas "Peso ideal" si el animal se ve robusto, grande o con grasa visible.
-- Usa el sistema BCS (Body Condition Score) del 1 al 9 de forma precisa:
-  * 1-3: Bajo peso (costillas muy visibles, sin grasa)
-  * 4-5: Peso ideal (costillas palpables con poca grasa)
-  * 6-7: Sobrepeso (costillas difíciles de palpar, grasa visible)
-  * 8-9: Obesidad (costillas no palpables, grasa excesiva, abdomen colgante)
-- Si el gato se ve gordo o robusto, asigna BCS 6 o mayor.
-- alerta_peso debe ser true si BCS >= 6
+REGLAS OBLIGATORIAS:
+1. Reemplaza CADA campo en MAYUSCULAS con el valor REAL observado en la imagen
+2. raza.nombre: ESPECIFICO — "Gato Doméstico de Pelo Corto Naranja Atigrado", "Maine Coon", "Siamés" — NUNCA "No determinada" ni "Desconocida"
+3. color.color_principal: el color REAL del pelaje — naranja, negro, gris, blanco, marrón, crema, canela, dorado, etc
+4. color.patron: Sólido, Atigrado, Bicolor, Tricolor, Carey, Manchado o Punto — observa el pelaje real
+5. color.hex_aproximado: el código hex más cercano al color real del pelaje
+6. orejas.posicion: posición REAL observada — Erguidas, Hacia adelante, Hacia atrás, Aplastadas, Relajadas
+7. gesto.emocion: Feliz, Relajado, Curioso, Alerta, Asustado, Enojado, Juguetón o Somnoliento
+8. salud_visual.ojos: color de ojos, si están abiertos/entrecerrados, presencia de secreciones, brillo
+9. salud_visual.pelaje: textura (suave/áspero), brillo, limpieza, longitud (corto/largo/medio), condición
+10. BCS del 1-9: gato robusto/grande = 6+, gato delgado = 1-3, normal = 4-5
+11. alerta_peso: true si BCS >= 6
+12. NO uses null en campos de texto — usa "-" si no puedes determinarlo
 
-INSTRUCCIONES PARA OREJAS:
-- Si las orejas están aplastadas, hacia atrás con fuerza o en posición de dolor/miedo, alerta_veterinario debe ser true
-- Posiciones de alerta: Aplastadas, Giradas hacia atrás, Pegadas a la cabeza
-
-El JSON debe tener exactamente esta estructura:
-{
-  "mascota_detectada": true o false,
-  "tipo": "gato" o "perro",
-  "raza": {
-    "nombre": "nombre de la raza en español",
-    "confianza": número del 0 al 100,
-    "descripcion": "descripción breve de la raza"
-  },
-  "peso": {
-    "estimado_kg": número decimal MUY preciso según tamaño real del animal,
-    "estimado_lb": número decimal,
-    "rango_min_kg": número decimal,
-    "rango_max_kg": número decimal,
-    "confianza": "Alta, Media o Baja"
-  },
-  "color": {
-    "color_principal": "nombre del color en español",
-    "colores_secundarios": ["color1", "color2"],
-    "patron": "Sólido, Atigrado, Bicolor, Tricolor, Carey, Manchado u otro",
-    "hex_aproximado": "#xxxxxx"
-  },
-  "estado_corporal": {
-    "bcs": número del 1 al 9 MUY PRECISO,
-    "estado": "Bajo peso, Algo delgado, Peso ideal, Sobrepeso u Obesidad",
-    "emoji": "emoji apropiado",
-    "color_hex": "#52C97A para ideal, #FF9800 para sobrepeso/algo delgado, #F44336 para obesidad/bajo peso",
-    "salud_pct": número del 0 al 100,
-    "consejo": "consejo personalizado y empático — si tiene sobrepeso u obesidad menciona dieta específica y ejercicio",
-    "alerta_peso": true si BCS >= 6 o false si BCS <= 5,
-    "mensaje_alerta": "mensaje de alerta si alerta_peso es true, sino null"
-  },
-  "orejas": {
-    "posicion": "Erguidas, Hacia adelante, Hacia atrás, Aplastadas o Relajadas",
-    "estado": "nombre descriptivo del estado",
-    "significado": "qué significa esta posición de orejas",
-    "alerta": true o false,
-    "alerta_veterinario": true si la posición indica dolor o miedo intenso, sino false,
-    "mensaje_veterinario": "mensaje urgente si alerta_veterinario es true, sino null"
-  },
-  "cola": {
-    "posicion": "Alta, Baja, Horizontal, Entre las patas, Moviéndose o No visible",
-    "significado": "qué significa esta posición de cola",
-    "visible": true o false
-  },
-  "gesto": {
-    "nombre": "nombre del estado de ánimo con emoji",
-    "emocion": "Feliz, Relajado, Curioso, Alerta, Asustado, Enojado, Juguetón o Somnoliento",
-    "descripcion": "descripción del comportamiento observado",
-    "nivel_estres": número del 0 al 10,
-    "cola_posicion": "descripción si es visible, sino null"
-  },
-  "salud_visual": {
-    "ojos": "descripción del estado de los ojos",
-    "pelaje": "descripción del estado del pelaje",
-    "observaciones": "cualquier observación de salud relevante"
-  }
-}
-
-Si no hay gato ni perro en la imagen, devuelve: {"mascota_detectada": false}
-Responde SOLO el JSON, nada más."""
+Si NO hay gato ni perro: {"mascota_detectada":false}
+Devuelve SOLO el JSON. Nada más."""
 
 
 # ════════════════════════════════════════════════════════════════
@@ -353,23 +290,24 @@ Responde SOLO el JSON."""
 # 🌐 ENGLISH PROMPTS
 # ══════════════════════════════════════════════════════════════
 
-PROMPT_EN = """You are an expert veterinarian with 30 years of experience in cats and dogs.
-Analyze the image and respond ONLY with valid JSON with this exact structure:
-{
-  "mascota_detectada": true/false,
-  "especie": "gato|perro|otro|no_detectado",
-  "raza_probable": "probable breed",
-  "edad_estimada": "puppy/kitten|young|adult|senior",
-  "condicion_corporal": "underweight|normal|overweight",
-  "estado_general": "healthy|alert|concerning|critical",
-  "ojos": "description of eyes",
-  "pelaje": "description of coat",
-  "postura": "description of posture",
-  "hallazgos": ["list of relevant findings"],
-  "recomendaciones": ["list of recommendations"],
-  "urgencia": "normal|observe|vet_soon|emergency",
-  "mensaje": "friendly message to the owner"
-}"""
+PROMPT_EN = """You are an expert veterinarian with 30 years of experience. Analyze the image and return EXACTLY this JSON structure, no extra text, no markdown, no code fences:
+
+{"mascota_detectada":true,"tipo":"cat","raza":{"nombre":"EXACT_SPECIFIC_BREED","confianza":85,"descripcion":"BRIEF_BREED_DESCRIPTION"},"peso":{"estimado_kg":4.2,"estimado_lb":9.3,"rango_min_kg":3.8,"rango_max_kg":4.8,"confianza":"Medium"},"color":{"color_principal":"ORANGE","colores_secundarios":["WHITE"],"patron":"Tabby","hex_aproximado":"#FF8C42"},"estado_corporal":{"bcs":5,"estado":"Ideal weight","emoji":"🐱","color_hex":"#52C97A","salud_pct":80,"consejo":"PERSONALIZED_DIET_ADVICE","alerta_peso":false,"mensaje_alerta":null},"orejas":{"posicion":"Upright","estado":"Alert","significado":"EAR_MEANING","alerta":false,"alerta_veterinario":false,"mensaje_veterinario":null},"cola":{"posicion":"High","significado":"TAIL_MEANING","visible":true},"gesto":{"nombre":"Curious 👀","emocion":"Curious","descripcion":"BEHAVIOR_DESCRIPTION","nivel_estres":2,"cola_posicion":null},"salud_visual":{"ojos":"EYE_COLOR_AND_CONDITION","pelaje":"COAT_TEXTURE_AND_CONDITION","observaciones":"HEALTH_OBSERVATIONS"}}
+
+MANDATORY RULES:
+1. Replace EVERY UPPERCASE field with the REAL observed value from the image
+2. raza.nombre: SPECIFIC — "Orange Tabby Domestic Shorthair", "Maine Coon", "Siamese" — NEVER "Unknown" or "Undetermined"
+3. color.color_principal: the REAL coat color — orange, black, gray, white, brown, cream, golden, etc
+4. color.patron: Solid, Tabby, Bicolor, Tricolor, Tortoiseshell, Spotted or Pointed
+5. color.hex_aproximado: the closest hex code to the real coat color
+6. orejas.posicion: REAL observed position — Upright, Forward, Back, Flattened, Relaxed
+7. gesto.emocion: Happy, Relaxed, Curious, Alert, Scared, Angry, Playful or Drowsy
+8. salud_visual.ojos: eye color, open/half-closed, any discharge, brightness
+9. salud_visual.pelaje: texture, shine, cleanliness, length (short/long/medium), condition
+10. BCS 1-9: robust/large cat = 6+, thin cat = 1-3, normal = 4-5
+
+If NO cat or dog: {"mascota_detectada":false}
+Return ONLY the JSON. Nothing else."""
 
 PROMPT_VOMITO_EN = """Act as a veterinarian with 30 years of experience in small animal medicine.
 Analyze the vomit image and respond ONLY with valid JSON:
@@ -751,93 +689,63 @@ class MotorGroq:
         _, buf = cv2.imencode(".jpg", img_anotada, [cv2.IMWRITE_JPEG_QUALITY, 75])
         img_b64 = base64.b64encode(buf.tobytes()).decode()
 
-        # Normalizar: soporta estructura anidada (Groq) y plana (Gemini)
-        def _d(val): return val if isinstance(val, dict) else {}
-
-        raza_info  = _d(resultado.get("raza"))
-        peso_info  = _d(resultado.get("peso"))
-        color_info = _d(resultado.get("color"))
-        corp_info  = _d(resultado.get("estado_corporal"))
-        gesto_info = _d(resultado.get("gesto"))
-        orejas     = _d(resultado.get("orejas"))
-        salud_vis  = _d(resultado.get("salud_visual"))
-
-        # Fallbacks para campos planos que Gemini puede devolver
-        raza_nombre = (raza_info.get("nombre")
-                       or resultado.get("raza_probable")
-                       or resultado.get("raza") if not isinstance(resultado.get("raza"), dict) else None
-                       or "-")
-        especie = resultado.get("tipo") or resultado.get("especie") or "gato"
-        peso_kg = (peso_info.get("estimado_kg")
-                   or resultado.get("peso_estimado_kg") or 4.0)
-        peso_lb = (peso_info.get("estimado_lb")
-                   or resultado.get("peso_estimado_lb") or round(peso_kg * 2.205, 1))
-        color_p = (color_info.get("color_principal")
-                   or resultado.get("color_principal") or "-")
-        bcs_val = corp_info.get("bcs") or resultado.get("bcs") or 5
-        cond    = (corp_info.get("estado")
-                   or resultado.get("condicion_corporal")
-                   or resultado.get("estado_corporal") or "-")
-        ojos_v  = (salud_vis.get("ojos")
-                   or resultado.get("ojos") or "-")
-        pelaje_v= (salud_vis.get("pelaje")
-                   or resultado.get("pelaje") or "-")
-        obs_v   = (salud_vis.get("observaciones")
-                   or resultado.get("observaciones") or "-")
-        emocion = (gesto_info.get("emocion")
-                   or resultado.get("estado_emocional")
-                   or resultado.get("estado_general") or "Alerta")
-        estres  = gesto_info.get("nivel_estres") or 3
+        raza_info  = resultado.get("raza", {})
+        peso_info  = resultado.get("peso", {})
+        color_info = resultado.get("color", {})
+        corp_info  = resultado.get("estado_corporal", {})
+        gesto_info = resultado.get("gesto", {})
+        orejas     = resultado.get("orejas", {})
+        salud_vis  = resultado.get("salud_visual", {})
 
         return {
             "gato_detectado":    True,
             "mascota_detectada": True,
-            "tipo":              especie,
+            "tipo":              resultado.get("tipo", "gato"),
             "timestamp":         time.time(),
             "caras_detectadas":  len(caras),
             "imagen_anotada":    img_b64,
 
             "raza": {
-                "raza":        raza_nombre,
-                "confianza":   raza_info.get("confianza", 75),
+                "raza":        raza_info.get("nombre", "-"),
+                "confianza":   raza_info.get("confianza", 0),
                 "descripcion": raza_info.get("descripcion", ""),
-                "peso_base":   peso_kg,
+                "peso_base":   peso_info.get("estimado_kg", 4.5),
             },
             "peso": {
-                "peso_kg":       peso_kg,
-                "peso_lb":       peso_lb,
-                "rango":         f'{peso_info.get("rango_min_kg", round(peso_kg-0.5,1))}-{peso_info.get("rango_max_kg", round(peso_kg+0.5,1))} kg',
+                "peso_kg":       peso_info.get("estimado_kg", 0),
+                "peso_lb":       peso_info.get("estimado_lb", 0),
+                "rango":         f'{peso_info.get("rango_min_kg",0)}-{peso_info.get("rango_max_kg",0)} kg',
                 "area_relativa": 0,
                 "confianza":     peso_info.get("confianza", "Media"),
             },
             "color": {
-                "color_principal":     color_p,
-                "colores_secundarios": color_info.get("colores_secundarios", resultado.get("colores_secundarios", [])),
-                "patron":              color_info.get("patron", resultado.get("patron_pelaje", "-")),
+                "color_principal":     color_info.get("color_principal", "-"),
+                "colores_secundarios": color_info.get("colores_secundarios", []),
+                "patron":              color_info.get("patron", "-"),
                 "hex":                 color_info.get("hex_aproximado", "#888888"),
             },
             "estado_corporal": {
-                "bcs":            bcs_val,
+                "bcs":            corp_info.get("bcs", 5),
                 "bcs_max":        9,
-                "estado":         cond,
-                "emoji":          corp_info.get("emoji", "🐱" if "gat" in especie else "🐶"),
+                "estado":         corp_info.get("estado", "-"),
+                "emoji":          corp_info.get("emoji", "🐱"),
                 "color_hex":      corp_info.get("color_hex", "#52C97A"),
                 "salud_pct":      corp_info.get("salud_pct", 75),
-                "consejo":        corp_info.get("consejo", resultado.get("consejo_salud", "")),
-                "alerta_peso":    corp_info.get("alerta_peso", bcs_val >= 6),
+                "consejo":        corp_info.get("consejo", ""),
+                "alerta_peso":    corp_info.get("alerta_peso", False),
                 "mensaje_alerta": corp_info.get("mensaje_alerta", None),
             },
             "gesto": {
-                "nombre":        gesto_info.get("nombre", emocion),
-                "emocion":       emocion,
-                "descripcion":   gesto_info.get("descripcion", resultado.get("postura", "-")),
-                "nivel_estres":  estres,
-                "movimiento":    "alto" if estres > 5 else "bajo",
+                "nombre":        gesto_info.get("nombre", "-"),
+                "emocion":       gesto_info.get("emocion", "-"),
+                "descripcion":   gesto_info.get("descripcion", "-"),
+                "nivel_estres":  gesto_info.get("nivel_estres", 0),
+                "movimiento":    "alto" if gesto_info.get("nivel_estres", 0) > 5 else "bajo",
                 "cola_posicion": gesto_info.get("cola_posicion"),
                 "confianza":     90,
             },
             "orejas": {
-                "posicion":           orejas.get("posicion", resultado.get("posicion_orejas", "-")),
+                "posicion":           orejas.get("posicion", "-"),
                 "estado":             orejas.get("estado", "-"),
                 "significado":        orejas.get("significado", "-"),
                 "alerta":             orejas.get("alerta", False),
@@ -845,14 +753,14 @@ class MotorGroq:
                 "mensaje_veterinario":orejas.get("mensaje_veterinario", None),
             },
             "cola": {
-                "posicion":   _d(resultado.get("cola")).get("posicion", "No visible"),
-                "significado":_d(resultado.get("cola")).get("significado", "-"),
-                "visible":    _d(resultado.get("cola")).get("visible", False),
+                "posicion":   resultado.get("cola", {}).get("posicion", "No visible"),
+                "significado":resultado.get("cola", {}).get("significado", "-"),
+                "visible":    resultado.get("cola", {}).get("visible", False),
             },
             "salud_visual": {
-                "ojos":          ojos_v,
-                "pelaje":        pelaje_v,
-                "observaciones": obs_v,
+                "ojos":          salud_vis.get("ojos", "-"),
+                "pelaje":        salud_vis.get("pelaje", "-"),
+                "observaciones": salud_vis.get("observaciones", "-"),
             },
         }
 
