@@ -18,7 +18,7 @@ from io import BytesIO
 from typing import List, Dict, Any, Optional
 import google.generativeai as genai
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Depends
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Depends, Form
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
@@ -354,6 +354,148 @@ Responde ÚNICAMENTE con JSON válido, sin texto adicional:
 
 Responde SOLO el JSON."""
 
+# ══════════════════════════════════════════════════════════════
+# 🌐 ENGLISH PROMPTS
+# ══════════════════════════════════════════════════════════════
+
+PROMPT_EN = """You are an expert veterinarian with 30 years of experience in cats and dogs.
+Analyze the image and respond ONLY with valid JSON with this exact structure:
+{
+  "mascota_detectada": true/false,
+  "especie": "gato|perro|otro|no_detectado",
+  "raza_probable": "probable breed",
+  "edad_estimada": "puppy/kitten|young|adult|senior",
+  "condicion_corporal": "underweight|normal|overweight",
+  "estado_general": "healthy|alert|concerning|critical",
+  "ojos": "description of eyes",
+  "pelaje": "description of coat",
+  "postura": "description of posture",
+  "hallazgos": ["list of relevant findings"],
+  "recomendaciones": ["list of recommendations"],
+  "urgencia": "normal|observe|vet_soon|emergency",
+  "mensaje": "friendly message to the owner"
+}"""
+
+PROMPT_VOMITO_EN = """Act as a veterinarian with 30 years of experience in small animal medicine.
+Analyze the vomit image and respond ONLY with valid JSON:
+{
+  "vomito_detectado": true/false,
+  "color_principal": "yellow|white|red|brown|green|transparent|other",
+  "tipo": "bile|food|mucus|blood|unknown",
+  "posibles_causas": ["list of possible causes"],
+  "nivel_urgencia": "normal|observe|vet_soon|emergency",
+  "recomendacion": "recommendation for the owner",
+  "mensaje": "clear message about what was found"
+}"""
+
+PROMPT_RESPIRACION_EN = """You are an expert veterinarian analyzing a pet breathing pattern.
+Respond ONLY with valid JSON:
+{
+  "mascota_detectada": true/false,
+  "frecuencia_respiratoria": "normal|elevated|low|very_elevated",
+  "rpm_parcial": estimated breaths per minute,
+  "nivel": "Normal|Elevated|Low|Critical",
+  "patron": "description of breathing pattern",
+  "signos_alarma": ["list of concerning signs"],
+  "conclusion": "general assessment",
+  "urgencia": "normal|observe|vet_soon|emergency"
+}"""
+
+PROMPT_ESPASMOS_EN = """You are a veterinary neurologist analyzing a pet for spasms or abnormal movements.
+Respond ONLY with valid JSON:
+{
+  "mascota_detectada": true/false,
+  "espasmos_detectados": true/false,
+  "tipo": "none|mild_tremor|muscle_spasm|convulsion|involuntary_movement",
+  "zona_afectada": "description of affected body part",
+  "intensidad": "mild|moderate|severe|not_applicable",
+  "posibles_causas": ["list of possible causes"],
+  "conclusion": "general assessment",
+  "urgencia": "normal|observe|vet_soon|emergency"
+}"""
+
+PROMPT_ENCIAS_EN = """You are Dr. MeowScan, a clinical veterinarian analyzing a pet's gums.
+Respond ONLY with valid JSON:
+{
+  "mascota_detectada": true/false,
+  "color_encias": "pink|pale|white|yellow|blue_purple|red|brown",
+  "estado_hidratacion": "normal|mild_dehydration|moderate_dehydration|severe_dehydration",
+  "tiempo_llenado_capilar": "normal|slow|very_slow",
+  "hallazgos": ["list of findings"],
+  "posibles_causas": ["list of possible causes"],
+  "nivel_urgencia": "normal|observe|vet_soon|emergency",
+  "recomendacion": "recommendation",
+  "mensaje": "message to the owner"
+}"""
+
+PROMPT_MAULLIDO_EN = """You are Dr. MeowScan, a feline ethologist analyzing a cat meow recording.
+Respond ONLY with valid JSON:
+{
+  "tipo_maullido": "greeting|hunger|pain|stress|attention|territorial|other",
+  "estado_emocional": "calm|happy|stressed|anxious|in_pain|playful",
+  "intensidad": "soft|moderate|intense|very_intense",
+  "posibles_causas": ["list of possible causes"],
+  "recomendacion": "recommendation for the owner",
+  "urgencia": "normal|observe|vet_soon|emergency",
+  "mensaje": "friendly interpretation message"
+}"""
+
+PROMPT_HISTORIA_EN = """You are Dr. MeowScan, a clinical veterinarian with 30 years of experience.
+Analyze the medical history of the pet and respond ONLY with valid JSON with this structure:
+{
+  "resumen_ejecutivo": "brief clinical summary",
+  "estado_general": "excellent|good|fair|poor",
+  "tendencia_salud": "improving|stable|declining|variable",
+  "sistemas_evaluados": {
+    "respiratorio": "assessment",
+    "digestivo": "assessment",
+    "neurologico": "assessment",
+    "oral": "assessment",
+    "conductual": "assessment",
+    "general": "assessment"
+  },
+  "hallazgos_principales": ["list of main findings"],
+  "patrones_identificados": ["list of identified patterns"],
+  "factores_riesgo": ["list of risk factors"],
+  "recomendaciones": ["list of recommendations"],
+  "proximos_pasos": ["list of next steps"],
+  "frecuencia_consulta_sugerida": "monthly|every_3_months|every_6_months|annual",
+  "mensaje_dueno": "personalized message to the owner"
+}"""
+
+PROMPT_VIDEO_RESPIRACION_EN = """
+You are an expert veterinarian analyzing a video of a pet's breathing.
+Analyze the video and respond ONLY with valid JSON with this exact structure:
+{
+  "frecuencia_respiratoria": "normal|elevated|low|very_elevated",
+  "respiraciones_por_minuto": estimated number,
+  "patron": "description of the breathing pattern observed",
+  "signos_alarma": ["list of concerning signs observed"],
+  "conclusion": "general breathing assessment",
+  "recomendacion": "what the owner should do",
+  "urgencia": "normal|observe|vet_soon|emergency"
+}
+Be precise and clear. If you cannot determine something, indicate it in the corresponding field.
+"""
+
+PROMPT_VIDEO_ESPASMOS_EN = """
+You are an expert veterinarian analyzing a video of a pet looking for spasms, tremors or abnormal movements.
+Analyze the video and respond ONLY with valid JSON with this exact structure:
+{
+  "espasmos_detectados": true/false,
+  "tipo": "none|mild_tremor|muscle_spasm|convulsion|involuntary_movement",
+  "frecuencia": "description of how often it occurs",
+  "zona_afectada": "description of which body part",
+  "intensidad": "mild|moderate|severe|not_applicable",
+  "posibles_causas": ["list of possible causes"],
+  "conclusion": "general assessment",
+  "recomendacion": "what the owner should do",
+  "urgencia": "normal|observe|vet_soon|emergency"
+}
+Be precise. If no spasms are detected, state it clearly.
+"""
+
+
 # ════════════════════════════════════════════════════════════════
 #  PROMPT ENCÍAS
 # ════════════════════════════════════════════════════════════════
@@ -508,7 +650,8 @@ class MotorGroq:
     def analizar_con_groq(self, img_bgr: np.ndarray) -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
         try:
-            return self._llamar_groq(img_b64, PROMPT_ES)
+            prompt = PROMPT_EN if lang == "en" else PROMPT_ES
+            return self._llamar_groq(img_b64, prompt)
         except json.JSONDecodeError as e:
             print(f"⚠️ JSON parse error: {e}")
             return self._resultado_fallback()
@@ -520,7 +663,8 @@ class MotorGroq:
     def analizar_vomito_con_groq(self, img_bgr: np.ndarray) -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
         try:
-            return self._llamar_groq(img_b64, PROMPT_VOMITO, max_tokens=1200)
+            prompt = PROMPT_VOMITO_EN if lang == "en" else PROMPT_VOMITO
+            return self._llamar_groq(img_b64, prompt, max_tokens=1200)
         except json.JSONDecodeError as e:
             print(f"⚠️ JSON vomito parse error: {e}")
             return {"vomito_detectado": False}
@@ -560,7 +704,7 @@ class MotorGroq:
         return img
 
     # ── ANÁLISIS COMPLETO MASCOTA ─────────────────────────────
-    def analizar_frame(self, img_bytes: bytes) -> Dict[str, Any]:
+    def analizar_frame(self, img_bytes: bytes, lang: str = "es") -> Dict[str, Any]:
         arr = np.frombuffer(img_bytes, np.uint8)
         img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         if img is None:
@@ -661,12 +805,13 @@ class MotorGroq:
     def analizar_encias_con_groq(self, img_bgr) -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
         try:
-            return self._llamar_groq(img_b64, PROMPT_ENCIAS, max_tokens=900)
+            prompt = PROMPT_ENCIAS_EN if lang == "en" else PROMPT_ENCIAS
+            return self._llamar_groq(img_b64, prompt, max_tokens=900)
         except Exception as e:
             print(f"❌ Encias error: {e}")
             return {"mascota_detectada": False}
 
-    def analizar_frame_encias(self, img_bytes: bytes) -> Dict[str, Any]:
+    def analizar_frame_encias(self, img_bytes: bytes, lang: str = "es") -> Dict[str, Any]:
         arr = np.frombuffer(img_bytes, np.uint8)
         img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         if img is None:
@@ -710,10 +855,11 @@ class MotorGroq:
         }
 
     # ── Analizar maullido ────────────────────────────────────
-    def analizar_audio_maullido(self, descripcion: str) -> Dict[str, Any]:
+    def analizar_audio_maullido(self, descripcion: str, lang: str = "es") -> Dict[str, Any]:
         """Analiza descripción de sonidos felinos con IA."""
         try:
-            prompt_completo = f"{PROMPT_MAULLIDO}\n\nSonidos capturados:\n{descripcion}"
+            _pm = PROMPT_MAULLIDO_EN if lang == "en" else PROMPT_MAULLIDO
+            prompt_completo = f"{_pm}\n\nSonidos capturados:\n{descripcion}"
             response = groq_client.chat.completions.create(
                 model="meta-llama/llama-4-scout-17b-16e-instruct",
                 messages=[{"role": "user", "content": prompt_completo}],
@@ -749,7 +895,7 @@ class MotorGroq:
             return {"mascota_detectada": False}
 
     # ── Historia médica predictiva ────────────────────────────
-    def analizar_historia_medica(self, historial: list) -> Dict[str, Any]:
+    def analizar_historia_medica(self, historial: list, lang: str = "es") -> Dict[str, Any]:
         if not historial:
             return {"error": "sin_historial"}
         
@@ -796,7 +942,8 @@ class MotorGroq:
         resumen_json = json.dumps(resumen_detallado, ensure_ascii=False, indent=2)
         total = len(historial)
         
-        prompt_con_datos = f"""{PROMPT_HISTORIA}
+        _ph = PROMPT_HISTORIA_EN if lang == "en" else PROMPT_HISTORIA
+        prompt_con_datos = f"""{_ph}
 
 HISTORIAL COMPLETO ({total} escaneos de TODOS los tipos - general, vomito, respiracion, espasmos, encias, maullido):
 {resumen_json}
@@ -891,7 +1038,7 @@ Analiza TODOS los escaneos, detecta patrones y tendencias entre los diferentes t
         }
 
     # ── ANÁLISIS COMPLETO VÓMITO ──────────────────────────────
-    def analizar_frame_vomito(self, img_bytes: bytes) -> Dict[str, Any]:
+    def analizar_frame_vomito(self, img_bytes: bytes, lang: str = "es") -> Dict[str, Any]:
         arr = np.frombuffer(img_bytes, np.uint8)
         img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
         if img is None:
@@ -999,23 +1146,23 @@ def health():
     return {"status": "ok", "version": "3.1", "ia_engine": "Groq Vision llama-4-scout", "groq": True}
 
 @app.post("/analizar")
-async def analizar(file: UploadFile = File(...), sesion_id: str = "default"):
+async def analizar(file: UploadFile = File(...), sesion_id: str = "default", lang: str = Form("es")):
     if motor is None:
         raise HTTPException(status_code=503, detail="Motor no inicializado")
     contenido = await file.read()
     try:
-        resultado = motor.analizar_frame(contenido)
+        resultado = motor.analizar_frame(contenido, lang=lang)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return JSONResponse(content=resultado)
 
 @app.post("/analizar_vomito")
-async def analizar_vomito(file: UploadFile = File(...), sesion_id: str = "default"):
+async def analizar_vomito(file: UploadFile = File(...), sesion_id: str = "default", lang: str = Form("es")):
     if motor is None:
         raise HTTPException(status_code=503, detail="Motor no inicializado")
     contenido = await file.read()
     try:
-        resultado = motor.analizar_frame_vomito(contenido)
+        resultado = motor.analizar_frame_vomito(contenido, lang=lang)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return JSONResponse(content=resultado)
@@ -1045,14 +1192,15 @@ async def analizar_espasmos(file: UploadFile = File(...)):
 
 class HistoriaRequest(BaseModel):
     historial: list
+    lang: str = "es"
 
 @app.post("/analizar_encias")
-async def analizar_encias(file: UploadFile = File(...)):
+async def analizar_encias(file: UploadFile = File(...), lang: str = Form("es")):
     if motor is None:
         raise HTTPException(status_code=503, detail="Motor no inicializado")
     contenido = await file.read()
     try:
-        resultado = motor.analizar_frame_encias(contenido)
+        resultado = motor.analizar_frame_encias(contenido, lang=lang)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return JSONResponse(content=resultado)
@@ -1062,6 +1210,7 @@ class MaullidoRequest(BaseModel):
     descripcion: str
     duracion_seg: float = 10.0
     intensidad_db: float = 0.0
+    lang: str = "es"
 
 @app.post("/analizar_maullido")
 async def analizar_maullido(req: MaullidoRequest):
@@ -1074,7 +1223,7 @@ Duración grabación: {req.duracion_seg} segundos
 Nivel de volumen promedio: {req.intensidad_db:.1f} dB
 Descripción del sonido detectado: {req.descripcion}
 """
-        resultado = motor.analizar_audio_maullido(desc_enriquecida)
+        resultado = motor.analizar_audio_maullido(desc_enriquecida, lang=req.lang)
         resultado["duracion_seg"]   = req.duracion_seg
         resultado["intensidad_db"]  = req.intensidad_db
         resultado["timestamp"]      = time.time()
@@ -1088,7 +1237,7 @@ async def historia_medica(req: HistoriaRequest):
     if motor is None:
         raise HTTPException(status_code=503, detail="Motor no inicializado")
     try:
-        resultado = motor.analizar_historia_medica(req.historial)
+        resultado = motor.analizar_historia_medica(req.historial, lang=req.lang)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return JSONResponse(content=resultado)
@@ -1131,7 +1280,7 @@ Sé preciso. Si no detectas espasmos, indícalo claramente.
 """
 
 @app.post("/analizar_video_respiracion")
-async def analizar_video_respiracion(file: UploadFile = File(...)):
+async def analizar_video_respiracion(file: UploadFile = File(...), lang: str = Form("es")):
     """Analiza video de respiración con Gemini 1.5 Flash"""
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Gemini API key no configurada")
@@ -1160,7 +1309,8 @@ async def analizar_video_respiracion(file: UploadFile = File(...)):
 
         print("🤖 Analizando con Gemini...")
         model    = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content([video_file, PROMPT_VIDEO_RESPIRACION])
+        _pvr = PROMPT_VIDEO_RESPIRACION_EN if lang == "en" else PROMPT_VIDEO_RESPIRACION
+        response = model.generate_content([video_file, _pvr])
         print(f"✅ Respuesta recibida: {response.text[:100]}")
 
         try: genai.delete_file(video_file.name)
@@ -1195,7 +1345,7 @@ async def analizar_video_respiracion(file: UploadFile = File(...)):
 
 
 @app.post("/analizar_video_espasmos")
-async def analizar_video_espasmos(file: UploadFile = File(...)):
+async def analizar_video_espasmos(file: UploadFile = File(...), lang: str = Form("es")):
     """Analiza video de espasmos con Gemini 1.5 Flash"""
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Gemini API key no configurada")
@@ -1220,7 +1370,8 @@ async def analizar_video_espasmos(file: UploadFile = File(...)):
             raise ValueError("Gemini no pudo procesar el video")
 
         model    = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content([video_file, PROMPT_VIDEO_ESPASMOS])
+        _pve = PROMPT_VIDEO_ESPASMOS_EN if lang == "en" else PROMPT_VIDEO_ESPASMOS
+        response = model.generate_content([video_file, _pve])
         print(f"✅ Espasmos respuesta: {response.text[:100]}")
 
         try: genai.delete_file(video_file.name)
