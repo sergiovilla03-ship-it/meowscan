@@ -624,9 +624,43 @@ class MotorGroq:
         pil_img.save(buf, format="JPEG", quality=85)
         return base64.b64encode(buf.getvalue()).decode("utf-8")
 
+    def _extraer_json(self, texto: str) -> dict:
+        """Extrae JSON robusto de respuesta de Gemini."""
+        texto = texto.strip()
+        # Try direct parse first
+        try:
+            return json.loads(texto)
+        except:
+            pass
+        # Remove markdown code blocks
+        if "```json" in texto:
+            texto = texto.split("```json")[1].split("```")[0].strip()
+        elif "```" in texto:
+            partes = texto.split("```")
+            for p in partes:
+                p = p.strip()
+                if p.startswith("{"):
+                    texto = p
+                    break
+        # Find first { and last }
+        start = texto.find("{")
+        end   = texto.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            texto = texto[start:end+1]
+        # Fix common Gemini issues
+        import re
+        # Remove trailing commas before } or ]
+        texto = re.sub(r",\s*([}\]])", r"", texto)
+        # Fix unquoted true/false/null
+        texto = re.sub(r":\s*True",  ": true",  texto)
+        texto = re.sub(r":\s*False", ": false", texto)
+        texto = re.sub(r":\s*None",  ": null",  texto)
+        return json.loads(texto)
+
     def _llamar_gemini(self, img_b64: str, prompt: str, max_tokens: int = 1500) -> dict:
         img_bytes = base64.b64decode(img_b64)
         img_part = {"mime_type": "image/jpeg", "data": img_bytes}
+        full_prompt = prompt + "\n\nIMPORTANT: Respond ONLY with valid JSON. No explanations, no markdown, just the JSON object."
         model = genai.GenerativeModel(
             "gemini-2.5-flash",
             generation_config=genai.GenerationConfig(
@@ -634,13 +668,10 @@ class MotorGroq:
                 temperature=0.1,
             )
         )
-        response = model.generate_content([img_part, prompt])
+        response = model.generate_content([img_part, full_prompt])
         texto = response.text.strip()
-        if "```json" in texto:
-            texto = texto.split("```json")[1].split("```")[0].strip()
-        elif "```" in texto:
-            texto = texto.split("```")[1].strip()
-        return json.loads(texto)
+        print(f"📝 Gemini raw response (first 200): {texto[:200]}")
+        return self._extraer_json(texto)
 
     # ── Analizar mascota ──────────────────────────────────────
     def analizar_con_groq(self, img_bgr: np.ndarray, lang: str = "es") -> Dict[str, Any]:
@@ -862,11 +893,7 @@ class MotorGroq:
             )
             response = model.generate_content(prompt_completo)
             texto = response.text.strip()
-            if "```json" in texto:
-                texto = texto.split("```json")[1].split("```")[0].strip()
-            elif "```" in texto:
-                texto = texto.split("```")[1].split("```")[0].strip()
-            return json.loads(texto)
+            return self._extraer_json(texto)
         except Exception as e:
             print(f"❌ Maullido error: {e}")
             return {"sonido_detectado": False, "error": str(e)}
@@ -954,11 +981,7 @@ Analiza TODOS los escaneos, detecta patrones y tendencias entre los diferentes t
             )
             response = model.generate_content(prompt_con_datos)
             texto = response.text.strip()
-            if "```json" in texto:
-                texto = texto.split("```json")[1].split("```")[0].strip()
-            elif "```" in texto:
-                texto = texto.split("```")[1].split("```")[0].strip()
-            return json.loads(texto)
+            return self._extraer_json(texto)
         except Exception as e:
             print(f"❌ Historia error: {e}")
             return {"error": str(e)}
