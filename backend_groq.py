@@ -1,7 +1,7 @@
 """
-🐱 MEOWSCAN v3.1 - BACKEND CON GROQ VISION IA
+🐱 MEOWSCAN v4.0 - BACKEND CON GEMINI 2.5 FLASH
 ════════════════════════════════════════════════════════════════
-FastAPI + OpenCV + Groq Vision
+FastAPI + OpenCV + Gemini 2.5 Flash
 Análisis: raza, peso, color, orejas, mood, salud + vómito
 ════════════════════════════════════════════════════════════════
 """
@@ -27,12 +27,10 @@ from PIL import Image
 from collections import defaultdict
 import uvicorn
 import time
-from groq import Groq
 
 # ── Configuración ─────────────────────────────────────────────
 HOST      = "0.0.0.0"
 PORT      = 8000
-GROQ_KEY      = os.environ.get("GROQ_API_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 import google.api_core.gapic_v1.client_info as client_info
 genai.configure(api_key=GEMINI_API_KEY, client_options={"api_endpoint": "generativelanguage.googleapis.com"})
@@ -67,9 +65,6 @@ def check_rate_limit(request: Request):
             status_code=429,
             detail="Too many requests. Please slow down.")
     _rate_store[ip].append(now)
-
-# ── Cliente Groq ──────────────────────────────────────────────
-groq_client = Groq(api_key=GROQ_KEY)
 
 # ── Cascades Haar ─────────────────────────────────────────────
 CASCADES_URL = {
@@ -629,21 +624,22 @@ class MotorGroq:
         pil_img.save(buf, format="JPEG", quality=85)
         return base64.b64encode(buf.getvalue()).decode("utf-8")
 
-    def _llamar_groq(self, img_b64: str, prompt: str, max_tokens: int = 1500) -> dict:
-        response = groq_client.chat.completions.create(
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
-                    {"type": "text", "text": prompt},
-                ],
-            }],
-            max_tokens=max_tokens,
-            temperature=0.1,
+    def _llamar_gemini(self, img_b64: str, prompt: str, max_tokens: int = 1500) -> dict:
+        img_bytes = base64.b64decode(img_b64)
+        img_part = {"mime_type": "image/jpeg", "data": img_bytes}
+        model = genai.GenerativeModel(
+            "gemini-2.5-flash",
+            generation_config=genai.GenerationConfig(
+                max_output_tokens=max_tokens,
+                temperature=0.1,
+            )
         )
-        texto = response.choices[0].message.content.strip()
-        texto = texto.replace("```json", "").replace("```", "").strip()
+        response = model.generate_content([img_part, prompt])
+        texto = response.text.strip()
+        if "```json" in texto:
+            texto = texto.split("```json")[1].split("```")[0].strip()
+        elif "```" in texto:
+            texto = texto.split("```")[1].strip()
         return json.loads(texto)
 
     # ── Analizar mascota ──────────────────────────────────────
@@ -651,7 +647,7 @@ class MotorGroq:
         img_b64 = self._img_to_b64(img_bgr)
         try:
             prompt = PROMPT_EN if lang == "en" else PROMPT_ES
-            return self._llamar_groq(img_b64, prompt)
+            return self._llamar_gemini(img_b64, prompt)
         except json.JSONDecodeError as e:
             print(f"⚠️ JSON parse error: {e}")
             return self._resultado_fallback()
@@ -664,7 +660,7 @@ class MotorGroq:
         img_b64 = self._img_to_b64(img_bgr)
         try:
             prompt = PROMPT_VOMITO_EN if lang == "en" else PROMPT_VOMITO
-            return self._llamar_groq(img_b64, prompt, max_tokens=1200)
+            return self._llamar_gemini(img_b64, prompt, max_tokens=1200)
         except json.JSONDecodeError as e:
             print(f"⚠️ JSON vomito parse error: {e}")
             return {"vomito_detectado": False}
@@ -806,7 +802,7 @@ class MotorGroq:
         img_b64 = self._img_to_b64(img_bgr)
         try:
             prompt = PROMPT_ENCIAS_EN if lang == "en" else PROMPT_ENCIAS
-            return self._llamar_groq(img_b64, prompt, max_tokens=900)
+            return self._llamar_gemini(img_b64, prompt, max_tokens=900)
         except Exception as e:
             print(f"❌ Encias error: {e}")
             return {"mascota_detectada": False}
@@ -860,13 +856,12 @@ class MotorGroq:
         try:
             _pm = PROMPT_MAULLIDO_EN if lang == "en" else PROMPT_MAULLIDO
             prompt_completo = f"{_pm}\n\nSonidos capturados:\n{descripcion}"
-            response = groq_client.chat.completions.create(
-                model="meta-llama/llama-4-scout-17b-16e-instruct",
-                messages=[{"role": "user", "content": prompt_completo}],
-                max_tokens=1000,
-                temperature=0.2,
+            model = genai.GenerativeModel(
+                "gemini-2.5-flash",
+                generation_config=genai.GenerationConfig(max_output_tokens=1000, temperature=0.2)
             )
-            texto = response.choices[0].message.content.strip()
+            response = model.generate_content(prompt_completo)
+            texto = response.text.strip()
             if "```json" in texto:
                 texto = texto.split("```json")[1].split("```")[0].strip()
             elif "```" in texto:
@@ -880,7 +875,7 @@ class MotorGroq:
     def analizar_respiracion_con_groq(self, img_bgr: np.ndarray) -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
         try:
-            return self._llamar_groq(img_b64, PROMPT_RESPIRACION, max_tokens=800)
+            return self._llamar_gemini(img_b64, PROMPT_RESPIRACION, max_tokens=800)
         except Exception as e:
             print(f"❌ Respiracion error: {e}")
             return {"mascota_detectada": False}
@@ -889,7 +884,7 @@ class MotorGroq:
     def analizar_espasmos_con_groq(self, img_bgr: np.ndarray) -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
         try:
-            return self._llamar_groq(img_b64, PROMPT_ESPASMOS, max_tokens=800)
+            return self._llamar_gemini(img_b64, PROMPT_ESPASMOS, max_tokens=800)
         except Exception as e:
             print(f"❌ Espasmos error: {e}")
             return {"mascota_detectada": False}
@@ -951,14 +946,12 @@ HISTORIAL COMPLETO ({total} escaneos de TODOS los tipos - general, vomito, respi
 Analiza TODOS los escaneos, detecta patrones y tendencias entre los diferentes tipos, y genera un diagnóstico clínico profesional integral."""
 
         try:
-            response = groq_client.chat.completions.create(
-                model="meta-llama/llama-4-scout-17b-16e-instruct",
-                messages=[{"role": "user", "content": prompt_con_datos}],
-                max_tokens=2000,
-                temperature=0.1,
+            model = genai.GenerativeModel(
+                "gemini-2.5-flash",
+                generation_config=genai.GenerationConfig(max_output_tokens=2000, temperature=0.1)
             )
-            texto = response.choices[0].message.content.strip()
-            # Clean JSON
+            response = model.generate_content(prompt_con_datos)
+            texto = response.text.strip()
             if "```json" in texto:
                 texto = texto.split("```json")[1].split("```")[0].strip()
             elif "```" in texto:
@@ -1143,7 +1136,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "3.1", "ia_engine": "Groq Vision llama-4-scout", "groq": True}
+    return {"status": "ok", "version": "3.1", "ia_engine": "Gemini 2.5 Flash", "groq": True}
 
 @app.post("/analizar")
 async def analizar(file: UploadFile = File(...), sesion_id: str = "default", lang: str = Form("es")):
