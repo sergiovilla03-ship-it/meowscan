@@ -626,13 +626,9 @@ class MotorGroq:
 
     def _extraer_json(self, texto: str) -> dict:
         """Extrae JSON robusto de respuesta de Gemini."""
+        import re
         texto = texto.strip()
-        # Try direct parse first
-        try:
-            return json.loads(texto)
-        except:
-            pass
-        # Remove markdown code blocks
+        # Strip markdown fences
         if "```json" in texto:
             texto = texto.split("```json")[1].split("```")[0].strip()
         elif "```" in texto:
@@ -642,21 +638,23 @@ class MotorGroq:
                 if p.startswith("{"):
                     texto = p
                     break
-        # Find first { and last }
+        # Extract from first { to last }
         start = texto.find("{")
         end   = texto.rfind("}")
         if start != -1 and end != -1 and end > start:
             texto = texto[start:end+1]
-        # Fix common Gemini issues
-        import re
-        # Remove trailing commas before } or ]
-        texto = re.sub(r",\s*([}\]])", r"", texto)
-        # Fix unquoted true/false/null
-        texto = re.sub(r":\s*True",  ": true",  texto)
-        texto = re.sub(r":\s*False", ": false", texto)
-        texto = re.sub(r":\s*None",  ": null",  texto)
-        return json.loads(texto)
-
+        # Fix Python literals
+        texto = texto.replace(": True",  ": true")
+        texto = texto.replace(": False", ": false")
+        texto = texto.replace(": None",  ": null")
+        # Remove trailing commas
+        texto = re.sub(r",[ \t\n\r]*}", "}", texto)
+        texto = re.sub(r",[ \t\n\r]*]", "]", texto)
+        try:
+            return json.loads(texto)
+        except Exception as e:
+            print(f"❌ JSON parse failed: {e}\nTexto: {texto[:300]}")
+            raise
     def _llamar_gemini(self, img_b64: str, prompt: str, max_tokens: int = 1500) -> dict:
         img_bytes = base64.b64decode(img_b64)
         img_part = {"mime_type": "image/jpeg", "data": img_bytes}
