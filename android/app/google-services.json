@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "29683345091-6ei4qcqup3654vfqoogf4vv1di4sqdu1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.meowscan",
+            "certificate_hash": "96a28bbbd710dbbebecc3a3d65800d64f596afba"
+          }
+        },
+        {
           "client_id": "29683345091-8u8s3rqr1ff09gkhgjn4oi1tfr2m39e5.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

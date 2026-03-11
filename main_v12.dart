@@ -223,33 +223,6 @@ class L {
       'scan_tip_resp':     'Mantén la cámara enfocada en el pecho',
       'scan_tip_spasm':    'Mantén la cámara enfocada en la espalda',
       'scan_tip_gums':     'Asegúrate de ver bien las encías',
-      // i18n additions
-      'what_analyzes':     '¿Qué analiza MeowScan?',
-      'feat_breed':        '🧬 Raza',
-      'feat_weight':       '⚖️ Peso',
-      'feat_color':        '🎨 Color',
-      'feat_body':         '💪 Estado corporal',
-      'feat_mood':         '😺 Mood',
-      'feat_ears':         '👂 Orejas',
-      'scan_title':        '¡Escanear mascota! 🐾',
-      'my_pets_label':     'mis mascotas',
-      'pet_type_label':    'TIPO DE MASCOTA',
-      'stress_level':      'Nivel de estrés',
-      'scan_complete':     'Análisis completo con IA',
-      'ready':             '¡Listo! 🎉',
-      'see_vet_now':       '¡VE AL VETERINARIO!',
-      'delete_appt_q':     '¿Eliminar esta cita?',
-      'how_to_use_qr':     '💡 ¿Cómo usar este ID?',
-      'whatsapp_number':   'Tu número de WhatsApp',
-      'whatsapp_hint':     'Ej: 573001234567 (con código de país)',
-      'whatsapp_tip':      'Incluye el código del país sin el + (Colombia: 57...)',
-      'qr_scan_contact':   'Escanea para contactar',
-      'meow_analysis':     'Análisis de Maullido',
-      'point_vomit':       'Apunta al vómito',
-      'not_applicable':    'No aplica',
-      'scan_navbar':       'Escanear',
-      'analyzing_video':   'Analizando...',
-      'video_few_secs':    'Esto puede tomar unos segundos',
     },
     'en': {
       'app_name':      'MeowScan',
@@ -397,33 +370,6 @@ class L {
       'scan_tip_resp':     'Keep the camera focused on the chest',
       'scan_tip_spasm':    'Keep the camera focused on the back',
       'scan_tip_gums':     'Make sure the gums are clearly visible',
-      // i18n additions
-      'what_analyzes':     'What does MeowScan analyze?',
-      'feat_breed':        '🧬 Breed',
-      'feat_weight':       '⚖️ Weight',
-      'feat_color':        '🎨 Color',
-      'feat_body':         '💪 Body condition',
-      'feat_mood':         '😺 Mood',
-      'feat_ears':         '👂 Ears',
-      'scan_title':        'Scan my pet! 🐾',
-      'my_pets_label':     'my pets',
-      'pet_type_label':    'PET TYPE',
-      'stress_level':      'Stress level',
-      'scan_complete':     'Full AI analysis',
-      'ready':             'Ready! 🎉',
-      'see_vet_now':       'SEE A VET NOW!',
-      'delete_appt_q':     'Delete this appointment?',
-      'how_to_use_qr':     '💡 How to use this ID?',
-      'whatsapp_number':   'Your WhatsApp number',
-      'whatsapp_hint':     'E.g.: 573001234567 (with country code)',
-      'whatsapp_tip':      'Include country code without + (Colombia: 57...)',
-      'qr_scan_contact':   'Scan to contact',
-      'meow_analysis':     'Meow Analysis',
-      'point_vomit':       'Point at the vomit',
-      'not_applicable':    'N/A',
-      'scan_navbar':       'Scan',
-      'analyzing_video':   'Analyzing...',
-      'video_few_secs':    'This may take a few seconds',
     },
   };
 
@@ -839,50 +785,6 @@ class FirestoreService {
       "updated":  FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
-
-  // ── Appointments ──────────────────────────────────────────
-  static Future<void> saveAppointments(List<VetAppointment> appts) async {
-    if (uid == null) return;
-    final col = _db.collection("usuarios").doc(uid).collection("citas");
-    final batch = _db.batch();
-    for (final a in appts) {
-      batch.set(col.doc(a.id), a.toJson());
-    }
-    await batch.commit();
-  }
-
-  static Future<void> deleteAppointment(String id) async {
-    if (uid == null) return;
-    await _db.collection("usuarios").doc(uid).collection("citas").doc(id).delete();
-  }
-
-  static Future<List<VetAppointment>> loadAppointments() async {
-    if (uid == null) return [];
-    final snap = await _db.collection("usuarios").doc(uid).collection("citas").get();
-    return snap.docs.map((d) => VetAppointment.fromJson(d.data())).toList();
-  }
-
-  // ── Medications ───────────────────────────────────────────
-  static Future<void> saveMedications(List<Medication> meds) async {
-    if (uid == null) return;
-    final col = _db.collection("usuarios").doc(uid).collection("medicamentos");
-    final batch = _db.batch();
-    for (final m in meds) {
-      batch.set(col.doc(m.id), m.toJson());
-    }
-    await batch.commit();
-  }
-
-  static Future<void> deleteMedication(String id) async {
-    if (uid == null) return;
-    await _db.collection("usuarios").doc(uid).collection("medicamentos").doc(id).delete();
-  }
-
-  static Future<List<Medication>> loadMedications() async {
-    if (uid == null) return [];
-    final snap = await _db.collection("usuarios").doc(uid).collection("medicamentos").get();
-    return snap.docs.map((d) => Medication.fromJson(d.data())).toList();
-  }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -960,14 +862,10 @@ class GoogleAuthService {
       );
 
       // Load cloud data
-      final mascotas     = await FirestoreService.loadMascotas();
-      final escaneos     = await FirestoreService.loadEscaneos();
-      final citas        = await FirestoreService.loadAppointments();
-      final medicamentos = await FirestoreService.loadMedications();
-      newUser.cats         = mascotas;
-      newUser.scans        = escaneos;
-      newUser.appointments = citas;
-      newUser.medications  = medicamentos;
+      final mascotas = await FirestoreService.loadMascotas();
+      final escaneos = await FirestoreService.loadEscaneos();
+      newUser.cats  = mascotas;
+      newUser.scans = escaneos;
 
       await StorageService.saveUser(newUser);
 
@@ -976,9 +874,8 @@ class GoogleAuthService {
         await EmailService.enviarBienvenida(newUser.email, newUser.username);
       }
       return newUser;
-    } catch (e, stack) {
-      print("Google sign in error REAL: ${e.runtimeType}: $e");
-      print("Stack: $stack");
+    } catch (e) {
+      print("Google sign in error: \$e");
       return null;
     }
   }
@@ -998,122 +895,97 @@ class NotificationService {
 
   static Future<void> init() async {
     if (_initialized) return;
-    try {
-      tz_data.initializeTimeZones();
-      tz.setLocalLocation(tz.getLocation('America/Bogota'));
-    } catch (_) {}
-    try {
-      const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-      await _plugin.initialize(const InitializationSettings(android: android));
-      await _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
-      _initialized = true;
-    } catch (e) {
-      print('⚠️ Notification init error: $e');
+    tz_data.initializeTimeZones();
+    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const ios     = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true);
+    await _plugin.initialize(
+      const InitializationSettings(android: android, iOS: ios));
+    // Request Android 13+ permission
+    await _plugin
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>()
+      ?.requestNotificationsPermission();
+    _initialized = true;
+  }
+
+  // ── Schedule vet appointment notifications ──
+  static Future<void> scheduleAppointment(VetAppointment appt) async {
+    await init();
+    // Cancel old ones for this appointment
+    await cancelAppointment(appt.id);
+
+    final now = DateTime.now();
+    // Notify 1 day before
+    final dayBefore = appt.date.subtract(const Duration(days: 1));
+    if (dayBefore.isAfter(now)) {
+      await _plugin.zonedSchedule(
+        _apptId(appt.id, 0),
+        L.lang == 'en' ? '🏥 Vet appointment tomorrow!' : '🏥 ¡Cita veterinaria mañana!',
+        L.lang == 'en'
+          ? '${appt.clinicName} – ${appt.reason}'
+          : '${appt.clinicName} – ${appt.reason}',
+        tz.TZDateTime.from(dayBefore, tz.local),
+        _apptDetails(),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime);
+    }
+    // Notify same day (2 hours before)
+    final sameDay = appt.date.subtract(const Duration(hours: 2));
+    if (sameDay.isAfter(now)) {
+      await _plugin.zonedSchedule(
+        _apptId(appt.id, 1),
+        L.lang == 'en' ? '🏥 Vet appointment in 2 hours!' : '🏥 ¡Cita veterinaria en 2 horas!',
+        '${appt.clinicName} – ${appt.reason}',
+        tz.TZDateTime.from(sameDay, tz.local),
+        _apptDetails(),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime);
     }
   }
 
-  static NotificationDetails _details(String channelId, String channelName) =>
-    NotificationDetails(
-      android: AndroidNotificationDetails(
-        channelId, channelName,
-        importance: Importance.max,
-        priority: Priority.max,
-        playSound: true,
-        enableVibration: true,
-        icon: '@mipmap/ic_launcher',
-      ),
-    );
-
-  // ── Mostrar notificación inmediata (para testing) ──
-  static Future<void> showNow(String title, String body) async {
-    await init();
-    try {
-      await _plugin.show(
-        DateTime.now().millisecondsSinceEpoch % 100000,
-        title, body,
-        _details('meowscan_now', 'MeowScan'),
-      );
-    } catch (e) { print('⚠️ showNow error: $e'); }
+  static Future<void> cancelAppointment(String apptId) async {
+    await _plugin.cancel(_apptId(apptId, 0));
+    await _plugin.cancel(_apptId(apptId, 1));
   }
 
-  // ── Programar medicamento ──
+  // ── Schedule daily medication reminder ──
   static Future<void> scheduleMedication(Medication med) async {
     await init();
     await cancelMedication(med.id);
     if (!med.active) return;
-    try {
-      final now = tz.TZDateTime.now(tz.local);
-      var scheduled = tz.TZDateTime(tz.local,
-        now.year, now.month, now.day,
-        med.reminderTime.hour, med.reminderTime.minute);
-      if (scheduled.isBefore(now)) {
-        scheduled = scheduled.add(const Duration(days: 1));
-      }
-      print('💊 Scheduling notification for: $scheduled');
-      await _plugin.zonedSchedule(
-        _medId(med.id),
-        L.lang == 'en' ? '💊 Medication reminder' : '💊 Recordatorio de medicamento',
-        '${med.name} – ${med.dose}',
-        scheduled,
-        _details('meowscan_meds', 'Medications'),
-        androidScheduleMode: AndroidScheduleMode.alarmClock,
-        uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time,
-      );
-      print('💊 Notification scheduled OK');
-    } catch (e) { print('⚠️ scheduleMedication error: $e'); }
+
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduled = tz.TZDateTime(tz.local,
+      now.year, now.month, now.day,
+      med.reminderTime.hour, med.reminderTime.minute);
+    if (scheduled.isBefore(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+
+    await _plugin.zonedSchedule(
+      _medId(med.id),
+      L.lang == 'en' ? '💊 Medication reminder' : '💊 Recordatorio de medicamento',
+      L.lang == 'en'
+        ? '${med.name} – ${med.dose} (${med.frequency})'
+        : '${med.name} – ${med.dose} (${med.frequency})',
+      scheduled,
+      _medDetails(),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+        UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time); // repeat daily
   }
 
   static Future<void> cancelMedication(String medId) async {
-    try { await _plugin.cancel(_medId(medId)); } catch (_) {}
+    await _plugin.cancel(_medId(medId));
   }
 
-  // ── Programar cita ──
-  static Future<void> scheduleAppointment(VetAppointment appt) async {
-    await init();
-    await cancelAppointment(appt.id);
-    try {
-      final now = DateTime.now();
-      final dayBefore = appt.date.subtract(const Duration(days: 1));
-      if (dayBefore.isAfter(now)) {
-        await _plugin.zonedSchedule(
-          _apptId(appt.id, 0),
-          L.lang == 'en' ? '🏥 Vet appointment tomorrow!' : '🏥 ¡Cita veterinaria mañana!',
-          '${appt.clinicName} – ${appt.reason}',
-          tz.TZDateTime.from(dayBefore, tz.local),
-          _details('meowscan_appts', 'Vet Appointments'),
-          androidScheduleMode: AndroidScheduleMode.alarmClock,
-          uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        );
-      }
-      final twoHoursBefore = appt.date.subtract(const Duration(hours: 2));
-      if (twoHoursBefore.isAfter(now)) {
-        await _plugin.zonedSchedule(
-          _apptId(appt.id, 1),
-          L.lang == 'en' ? '🏥 Vet appointment in 2 hours!' : '🏥 ¡Cita veterinaria en 2 horas!',
-          '${appt.clinicName} – ${appt.reason}',
-          tz.TZDateTime.from(twoHoursBefore, tz.local),
-          _details('meowscan_appts', 'Vet Appointments'),
-          androidScheduleMode: AndroidScheduleMode.alarmClock,
-          uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        );
-      }
-    } catch (e) { print('⚠️ scheduleAppointment error: $e'); }
-  }
-
-  static Future<void> cancelAppointment(String apptId) async {
-    try {
-      await _plugin.cancel(_apptId(apptId, 0));
-      await _plugin.cancel(_apptId(apptId, 1));
-    } catch (_) {}
-  }
-
-  // ── Reprogramar todo al abrir la app ──
+  // ── Reschedule all (called on app start) ──
   static Future<void> rescheduleAll(UserAccount user) async {
     await init();
     for (final appt in user.appointments) {
@@ -1126,12 +998,28 @@ class NotificationService {
     }
   }
 
+  // ── Helpers ──
   static int _apptId(String id, int suffix) =>
     (id.hashCode.abs() % 100000) * 10 + suffix;
   static int _medId(String id) =>
     (id.hashCode.abs() % 100000) * 10 + 5;
-}
 
+  static NotificationDetails _apptDetails() => const NotificationDetails(
+    android: AndroidNotificationDetails(
+      'meowscan_appts', 'Vet Appointments',
+      channelDescription: 'Reminders for vet appointments',
+      importance: Importance.high, priority: Priority.high,
+      icon: '@mipmap/ic_launcher'),
+    iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true));
+
+  static NotificationDetails _medDetails() => const NotificationDetails(
+    android: AndroidNotificationDetails(
+      'meowscan_meds', 'Medications',
+      channelDescription: 'Daily medication reminders',
+      importance: Importance.high, priority: Priority.high,
+      icon: '@mipmap/ic_launcher'),
+    iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true));
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1146,8 +1034,6 @@ void main() async {
   L.setLang(lang);
   final cameras = await availableCameras();
   final user    = await StorageService.loadUser();
-  // Reprogramar notificaciones al iniciar (sobrevive reinicios)
-  if (user != null) await NotificationService.rescheduleAll(user);
   runApp(MeowScanApp(cameras: cameras, initialUser: user));
 }
 
@@ -1234,10 +1120,8 @@ class _AuthScreenState extends State<AuthScreen>
         passwordHash: '',
       );
       // Load from Firestore
-      user.cats         = await FirestoreService.loadMascotas();
-      user.scans        = await FirestoreService.loadEscaneos();
-      user.appointments = await FirestoreService.loadAppointments();
-      user.medications  = await FirestoreService.loadMedications();
+      user.cats  = await FirestoreService.loadMascotas();
+      user.scans = await FirestoreService.loadEscaneos();
       await StorageService.saveUser(user);
       if (mounted) {
         MeowScanApp.of(context)?.setUser(user);
@@ -1529,14 +1413,7 @@ class _MainShellState extends State<MainShell> {
 
   void _refresh() async {
     final u = await StorageService.loadUser();
-    if (u != null) {
-      u.appointments = await FirestoreService.loadAppointments();
-      u.medications  = await FirestoreService.loadMedications();
-      u.cats         = await FirestoreService.loadMascotas();
-      u.scans        = await FirestoreService.loadEscaneos();
-      await StorageService.saveUser(u);
-      if (mounted) setState(() => _user = u);
-    }
+    if (u != null && mounted) setState(() => _user = u);
   }
 
   @override
@@ -1557,7 +1434,7 @@ class _MainShellState extends State<MainShell> {
 
   Widget _navBar() {
     final items = [
-      ['🏠', L.get('scan_navbar')],
+      ['🏠', 'Escanear'],
       ['📋', L.get('history')],
       ['🐱', L.get('my_cats')],
       ['⚙️', L.get('settings')],
@@ -1747,7 +1624,7 @@ class _HomeTabState extends State<HomeTab> {
         Text(L.get('start_scan'),
           style: _nunito(22, Colors.white, weight: FontWeight.w900)),
         const SizedBox(height: 6),
-        Text("$SCAN_DURATION ${L.get('seconds')} · ${L.get('scan_complete')}",
+        Text("$SCAN_DURATION ${L.get('seconds')} · Análisis completo con IA",
           style: _nunito(13, Colors.white70)),
       ]),
     ),
@@ -2001,15 +1878,15 @@ class _HomeTabState extends State<HomeTab> {
   Widget _features() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      kLabel(L.get('what_analyzes')),
+      kLabel("¿Qué analiza MeowScan?"),
       const SizedBox(height: 12),
       Wrap(spacing: 8, runSpacing: 8, children: [
-        _chip(L.get('feat_breed'),  kPurple),
-        _chip(L.get('feat_weight'), kTurquoise),
-        _chip(L.get('feat_color'),  kYellow),
-        _chip(L.get('feat_body'),   kCoral),
-        _chip(L.get('feat_mood'),   kGreen),
-        _chip(L.get('feat_ears'),   kBlue),
+        _chip("🧬 Raza",           kPurple),
+        _chip("⚖️ Peso",           kTurquoise),
+        _chip("🎨 Color",          kYellow),
+        _chip("💪 Estado corporal", kCoral),
+        _chip("😺 Mood",           kGreen),
+        _chip("👂 Orejas",         kBlue),
       ]),
     ],
   );
@@ -2062,7 +1939,7 @@ class _AddCatSheetState extends State<AddCatSheet> {
           kTitle(L.get('add_pet'), size: 20, color: kCoral),
         ]),
         const SizedBox(height: 16),
-        kLabel(L.get('pet_type_label')),
+        kLabel("TIPO DE MASCOTA"),
         const SizedBox(height: 10),
         Row(children: [
           Expanded(child: GestureDetector(
@@ -2225,7 +2102,6 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       final uri   = Uri.parse('$proto://$ip$port/analizar?sesion_id=$_sesion');
       final req   = http.MultipartRequest('POST', uri)
         ..headers['X-API-Key'] = kApiKey
-        ..fields['lang'] = L.lang
         ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'f.jpg'));
       final s   = await req.send().timeout(const Duration(seconds: 10));
       final res = await http.Response.fromStream(s);
@@ -2234,13 +2110,6 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     } catch (_) {} finally {
       if (mounted) setState(() => _sending = false);
     }
-  }
-
-  static String _normalizeTipo(String endpoint) {
-    if (endpoint.contains('respiracion')) return 'respiracion';
-    if (endpoint.contains('espasmo'))     return 'espasmos';
-    if (endpoint.contains('encias'))      return 'encias';
-    return endpoint;
   }
 
   void _finish() async {
@@ -2637,7 +2506,7 @@ class ResultScreen extends StatelessWidget {
       const SizedBox(height: 8),
       kBody(descripcion, color: kMuted, size: 13),
       const SizedBox(height: 10),
-              kBody("${L.get('stress_level')}: $estres/10", color: kMuted, size: 12),
+      kBody("Nivel de estrés: $estres/10", color: kMuted, size: 12),
       const SizedBox(height: 6),
       ClipRRect(
         borderRadius: BorderRadius.circular(8),
@@ -2703,11 +2572,11 @@ class ResultScreen extends StatelessWidget {
       build: (pw.Context ctx) => pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Text(L.lang == 'en' ? 'MeowScan — Pet Report' : 'MeowScan — Reporte Felino',
+          pw.Text('MeowScan — Reporte Felino',
             style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 8),
-          pw.Text((L.lang == 'en' ? 'Pet: ' : 'Mascota: ') + cat.name + ' · ' + cat.ageYears.toString() + (L.lang == 'en' ? 'y ' : ' años ') + cat.ageMonths.toString() + (L.lang == 'en' ? 'm' : ' meses')),
-          pw.Text((L.lang == 'en' ? 'Date: ' : 'Fecha: ') + DateFormat('dd/MM/yyyy HH:mm').format(record.date)),
+          pw.Text('Gato: ${cat.name} · ${cat.ageYears} años ${cat.ageMonths} meses'),
+          pw.Text('Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(record.date)}'),
           pw.Divider(),
           pw.SizedBox(height: 12),
           _pdfRow('Raza',           r['raza']?['raza']              ?? '-'),
@@ -2722,7 +2591,7 @@ class ResultScreen extends StatelessWidget {
           _pdfRow('Estado ánimo',   r['gesto']?['nombre']            ?? '-'),
           _pdfRow('Nivel estrés',   '${r['gesto']?['nivel_estres'] ?? 0}/10'),
           pw.SizedBox(height: 16),
-          pw.Text(L.lang == 'en' ? 'Tip:' : 'Consejo:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+          pw.Text('Consejo:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
           pw.Text(r['estado_corporal']?['consejo'] ?? ''),
           pw.SizedBox(height: 24),
           pw.Text('Generado por MeowScan v$APP_VERSION',
@@ -3031,7 +2900,7 @@ class _ProfileTabState extends State<ProfileTab> {
   void _deleteCat(CatProfile cat) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
+      builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(L.get('delete_confirm'),
           style: _nunito(18, kText, weight: FontWeight.w800)),
@@ -3039,10 +2908,10 @@ class _ProfileTabState extends State<ProfileTab> {
           style: _nunito(14, kMuted)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            onPressed: () => Navigator.pop(context, false),
             child: Text(L.get('cancel_delete'), style: _nunito(14, kMuted))),
           ElevatedButton(
-            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: kCoral,
               shape: RoundedRectangleBorder(
@@ -3053,17 +2922,14 @@ class _ProfileTabState extends State<ProfileTab> {
       ),
     );
     if (confirm == true) {
-      await FirestoreService.deleteMascota(cat.id);
-      final scansToDelete = widget.user.scans.where((s) => s.catId == cat.id).toList();
-      for (final s in scansToDelete) {
-        await FirestoreService.deleteEscaneo(s.id);
-      }
       widget.user.cats.removeWhere((c) => c.id == cat.id);
       widget.user.scans.removeWhere((s) => s.catId == cat.id);
       await StorageService.saveCats(widget.user.cats);
       await StorageService.saveScans(widget.user.scans);
-      if (mounted) setState(() {});
+      await FirestoreService.saveMascotas(widget.user.cats);
+      await FirestoreService.saveEscaneos(widget.user.scans);
       widget.onRefresh();
+      setState(() {});
     }
   }
 
@@ -3087,7 +2953,7 @@ class _ProfileTabState extends State<ProfileTab> {
           const SizedBox(height: 20),
           _userCard(),
           const SizedBox(height: 20),
-          kLabel(L.get('my_pets_label')),
+          kLabel("mis mascotas"),
           const SizedBox(height: 12),
           if (widget.user.cats.isEmpty)
             Container(
@@ -3163,7 +3029,7 @@ class _ProfileTabState extends State<ProfileTab> {
           Text(cat.name, style: _nunito(16, kText, weight: FontWeight.w800)),
           kBody("${cat.ageYears} ${L.get('years')} ${cat.ageMonths} ${L.get('months')}",
               color: kMuted, size: 12),
-            kBody("$scans ${L.lang == 'en' ? 'scans' : 'escaneos'}", color: kCoral, size: 12),
+          kBody("$scans escaneos", color: kCoral, size: 12),
           const SizedBox(height: 8),
           Row(children: [
             _iconBtn(Icons.history_rounded, kTurquoise, () async {
@@ -3386,11 +3252,10 @@ class _SettingsTabState extends State<SettingsTab> {
               Text("🐱 MeowScan v$APP_VERSION",
                 style: _nunito(15, kPurple, weight: FontWeight.w800)),
               const SizedBox(height: 4),
-              kBody("IA: Groq llama-4-scout · Video: Gemini 2.5", color: kMuted, size: 12),
+              kBody("IA: Groq Vision llama-4-maverick", color: kMuted, size: 12),
               kBody("© 2026 Candle Technology", color: kMuted, size: 11),
             ]),
           ),
-
           const SizedBox(height: 12),
           GestureDetector(
             onTap: () => _changePassword(context),
@@ -3512,7 +3377,6 @@ class _VomitoScanScreenState extends State<VomitoScanScreen>
       final uri   = Uri.parse("$proto://$ip${port}/analizar_vomito");
       final req   = http.MultipartRequest("POST", uri)
         ..headers['X-API-Key'] = kApiKey
-        ..fields['lang'] = L.lang
         ..files.add(http.MultipartFile.fromBytes("file", bytes, filename: "v.jpg"));
       final s   = await req.send().timeout(const Duration(seconds: 10));
       final res = await http.Response.fromStream(s);
@@ -3524,13 +3388,6 @@ class _VomitoScanScreenState extends State<VomitoScanScreen>
     } catch (_) {} finally {
       if (mounted) setState(() => _sending = false);
     }
-  }
-
-  static String _normalizeTipo(String endpoint) {
-    if (endpoint.contains('respiracion')) return 'respiracion';
-    if (endpoint.contains('espasmo'))     return 'espasmos';
-    if (endpoint.contains('encias'))      return 'encias';
-    return endpoint;
   }
 
   void _finish() async {
@@ -3641,7 +3498,7 @@ class _VomitoScanScreenState extends State<VomitoScanScreen>
           : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
               const Text("🔬", style: TextStyle(fontSize: 56)),
               const SizedBox(height: 8),
-              Text(L.get('point_vomit'),
+              Text("Apunta al vómito",
                 style: _nunito(14, Colors.white, weight: FontWeight.w800)),
               const SizedBox(height: 4),
               Text("de ${widget.cat.name}",
@@ -3754,7 +3611,7 @@ class VomitoResultScreen extends StatelessWidget {
                   Expanded(child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(L.get('see_vet_now'),
+                      Text("¡VE AL VETERINARIO!",
                         style: _nunito(15, Colors.red, weight: FontWeight.w900)),
                       Text(mensajeUrg, style: _nunito(12, Colors.red.shade800)),
                     ])),
@@ -3934,7 +3791,6 @@ class _MedicoScanBaseState extends State<_MedicoScanBase> {
           "?session_id=$_sessionId&finalizar=$finalizar");
       final req = http.MultipartRequest("POST", uri)
         ..headers['X-API-Key'] = kApiKey
-        ..fields['lang'] = L.lang
         ..files.add(http.MultipartFile.fromBytes("file", bytes, filename: "f.jpg"));
       final s   = await req.send().timeout(const Duration(seconds: 15));
       final res = await http.Response.fromStream(s);
@@ -3967,13 +3823,6 @@ class _MedicoScanBaseState extends State<_MedicoScanBase> {
     }
   }
 
-  static String _normalizeTipo(String endpoint) {
-    if (endpoint.contains('respiracion')) return 'respiracion';
-    if (endpoint.contains('espasmo'))     return 'espasmos';
-    if (endpoint.contains('encias'))      return 'encias';
-    return endpoint;
-  }
-
   void _finish() async {
     _scanTimer?.cancel(); _cdTimer?.cancel();
     setState(() { _scanning = false; _sending = true; });
@@ -3983,7 +3832,7 @@ class _MedicoScanBaseState extends State<_MedicoScanBase> {
       final record = ScanRecord(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         catId: widget.cat.id, date: DateTime.now(),
-        resultado: {..._last!, 'tipo': _normalizeTipo(widget.endpoint)});
+        resultado: {..._last!, 'tipo': widget.endpoint});
       widget.user.scans.add(record);
       await StorageService.saveScans(widget.user.scans);
       await FirestoreService.saveEscaneos(widget.user.scans);
@@ -4167,26 +4016,19 @@ class _VideoScanBaseState extends State<_VideoScanBase> {
       final uri       = Uri.parse("$proto://$ip$port/${widget.endpoint}");
       final req       = http.MultipartRequest("POST", uri)
         ..headers['X-API-Key'] = kApiKey
-        ..fields['lang'] = L.lang
         ..files.add(http.MultipartFile.fromBytes("file", bytes, filename: "video.mp4"));
       final s   = await req.send().timeout(const Duration(seconds: 60));
       final res = await http.Response.fromStream(s);
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
-        // Normalizar tipo segun endpoint
-        String tipoNorm = widget.endpoint;
-        if (tipoNorm.contains('respiracion')) tipoNorm = 'respiracion';
-        else if (tipoNorm.contains('espasmo')) tipoNorm = 'espasmos';
-        else if (tipoNorm.contains('encias'))  tipoNorm = 'encias';
-        // Save to history CON tipo
+        // Save to history
         final scan = ScanRecord(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           catId: widget.cat.id,
           date: DateTime.now(),
-          resultado: {...data, 'tipo': tipoNorm});
+          resultado: data);
         widget.user.scans.add(scan);
         await StorageService.saveScans(widget.user.scans);
-        await FirestoreService.saveEscaneos(widget.user.scans);
         setState(() { _result = data; _done = true; _analyzing = false; });
         widget.onComplete();
       } else {
@@ -4248,9 +4090,9 @@ class _VideoScanBaseState extends State<_VideoScanBase> {
       return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         const CircularProgressIndicator(color: kPurple, strokeWidth: 3),
         const SizedBox(height: 20),
-        kTitle(L.get('analyzing_video'), size: 16),
+        kTitle(L.lang == 'en' ? "Gemini is analyzing..." : "Gemini analizando...", size: 16),
         const SizedBox(height: 8),
-        kBody(L.get('video_few_secs'),
+        kBody(L.lang == 'en' ? "This may take a few seconds" : "Esto puede tomar unos segundos",
           color: kMuted),
       ]));
     }
@@ -4332,7 +4174,6 @@ class _VideoScanBaseState extends State<_VideoScanBase> {
     final urgencia = r['urgencia'] as String? ?? 'normal';
     final urgColor = _urgencyColor(urgencia);
     final isResp   = widget.endpoint.contains('respiracion');
-    final isEncias = widget.endpoint.contains('encias');
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -4365,13 +4206,6 @@ class _VideoScanBaseState extends State<_VideoScanBase> {
           _resultCard("🫁", L.lang == 'en' ? "Breathing rate" : "Frecuencia respiratoria",
             "${r['respiraciones_por_minuto'] ?? '--'} rpm - ${r['frecuencia_respiratoria'] ?? ''}"),
           _resultCard("📊", L.lang == 'en' ? "Pattern" : "Patrón", r['patron'] ?? ''),
-        ] else if (isEncias) ...[
-          _resultCard("🦷", L.lang == 'en' ? "Gum color" : "Color de encías",
-            r['color_encias'] ?? '-'),
-          _resultCard("💧", L.lang == 'en' ? "Hydration" : "Hidratación",
-            r['hidratacion'] ?? '-'),
-          _resultCard("🔍", L.lang == 'en' ? "Capillary refill" : "Relleno capilar",
-            r['relleno_capilar'] ?? '-'),
         ] else ...[
           _resultCard("🔍", L.lang == 'en' ? "Spasms detected" : "Espasmos detectados",
             ((r['espasmos_detectados'] == true ? (L.lang == 'en' ? "Yes" : "Sí") : "No") + " - " + (r['tipo'] ?? '') + " - " + (r['intensidad'] ?? ''))),
@@ -4447,7 +4281,7 @@ class RespiracionScanScreen extends StatelessWidget {
     instruccion: L.lang == 'en'
       ? "Point the camera at ${cat.name}\'s chest area so breathing is visible"
       : "Apunta la cámara al pecho de ${cat.name} para que se vea la respiración",
-    duracion: 30, cat: cat, user: user, onComplete: onComplete);
+    duracion: 15, cat: cat, user: user, onComplete: onComplete);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -4472,7 +4306,7 @@ class EspasmosScanScreen extends StatelessWidget {
     instruccion: L.lang == 'en'
       ? "Record ${cat.name} so any spasms or tremors are visible"
       : "Graba a ${cat.name} para que se vean los espasmos o temblores",
-    duracion: 30, cat: cat, user: user, onComplete: onComplete);
+    duracion: 20, cat: cat, user: user, onComplete: onComplete);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -4737,38 +4571,14 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
   Future<void> _cargar() async {
     setState(() { _loading = true; _error = null; });
     try {
-      // Siempre recargar desde Firestore para tener datos frescos
-      final todosLosScans = await FirestoreService.loadEscaneos();
-      widget.user.scans
-        ..clear()
-        ..addAll(todosLosScans);
-
       final scansGato = widget.user.scans
           .where((s) => s.catId == widget.cat.id)
           .toList();
 
-      // Debug: print all scan tipos
-      debugPrint('MEOW_DEBUG total=' + scansGato.length.toString());
-      for (final s in scansGato) {
-        final t = (s.resultado['tipo'] ?? 'null').toString();
-        debugPrint('MEOW_SCAN tipo=' + t + ' catId=' + s.catId);
-      }
-
-      // Solo 5 tipos especializados, 2 de cada uno
-      final tipos = ['vomito', 'encias', 'maullido', 'respiracion', 'espasmos'];
-      final Map<String, int> conteo = {};
-      for (final t in tipos) {
-        conteo[t] = scansGato.where((s) {
-          final tipo = (s.resultado['tipo'] ?? '').toString().toLowerCase();
-          return tipo == t || tipo.contains(t);
-        }).length;
-      }
-      debugPrint('MEOW_CONTEO ' + conteo.toString());
-      final faltanTipos = tipos.where((t) => (conteo[t] ?? 0) < 2).toList();
-      if (faltanTipos.isNotEmpty) {
-        final partes = conteo.entries.map((e) => e.key + ':' + e.value.toString()).join(',');
+      const minScans = 15;
+      if (scansGato.length < minScans) {
         setState(() { _loading = false;
-          _error = 'historia_insuficiente:' + partes; });
+          _error = "historia_insuficiente:${scansGato.length}"; });
         return;
       }
 
@@ -4836,26 +4646,15 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
 
   Widget _buildErrorOrInsuficiente(String error) {
     if (error.startsWith('historia_insuficiente:')) {
-      // Parse conteo: "general:1,vomito:0,encias:2,maullido:1,respiracion:0,espasmos:2"
-      final payload = error.substring('historia_insuficiente:'.length);
-      final Map<String, int> conteo = {};
-      for (final part in payload.split(',')) {
-        final kv = part.split(':');
-        if (kv.length == 2) conteo[kv[0]] = int.tryParse(kv[1]) ?? 0;
-      }
-      final tipos = ['vomito', 'encias', 'maullido', 'respiracion', 'espasmos'];
-      final emojis = {'general':'🔍','vomito':'🤮','encias':'👅','maullido':'😿','respiracion':'🫁','espasmos':'🐾'};
-      final nombres_es = {'general':'General','vomito':'Vómito','encias':'Encías','maullido':'Maullido','respiracion':'Respiración','espasmos':'Espasmos'};
-      final nombres_en = {'general':'General','vomito':'Vomit','encias':'Gums','maullido':'Meow','respiracion':'Breathing','espasmos':'Spasms'};
-      final actual  = conteo.values.fold(0, (a, b) => a + b);
-      final total   = 10; // 2 x 5 types
-      final pct     = (actual / total).clamp(0.0, 1.0);
-      final completados = tipos.where((t) => (conteo[t] ?? 0) >= 2).length; // out of 5
+      final actual  = int.tryParse(error.split(':')[1]) ?? 0;
+      const total   = 15;
+      final faltan  = total - actual;
+      final pct     = actual / total;
 
       return SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
         child: Column(children: [
-          // Header
+          // Stethoscope illustration
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 32),
@@ -4866,106 +4665,115 @@ class _HistoriaMedicaScreenState extends State<HistoriaMedicaScreen> {
               borderRadius: BorderRadius.circular(28)),
             child: Column(children: [
               Stack(alignment: Alignment.center, children: [
-                Container(width: 120, height: 120,
-                  decoration: BoxDecoration(shape: BoxShape.circle,
+                Container(
+                  width: 120, height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
                     gradient: LinearGradient(
                       colors: [kPurple.withOpacity(0.15), kCoral.withOpacity(0.10)],
-                      begin: Alignment.topLeft, end: Alignment.bottomRight))),
-                Container(width: 96, height: 96,
-                  decoration: BoxDecoration(shape: BoxShape.circle,
+                      begin: Alignment.topLeft, end: Alignment.bottomRight)),
+                ),
+                Container(
+                  width: 96, height: 96,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
                     gradient: const LinearGradient(
                       colors: [kPurple, Color(0xFFA855F7)],
                       begin: Alignment.topLeft, end: Alignment.bottomRight),
-                    boxShadow: [BoxShadow(color: kPurple.withOpacity(0.4),
+                    boxShadow: [BoxShadow(
+                      color: kPurple.withOpacity(0.4),
                       blurRadius: 20, offset: const Offset(0, 8))]),
-                  child: const Center(child: Text("🩺", style: TextStyle(fontSize: 46)))),
+                  child: const Center(
+                    child: Text("🩺", style: TextStyle(fontSize: 46)))),
               ]),
               const SizedBox(height: 20),
-              Text(L.lang == 'en' ? "Medical History" : "Historia Médica",
+              Text(
+                L.lang == 'en' ? "Medical History" : "Historia Médica",
                 style: _nunito(22, kPurple, weight: FontWeight.w900)),
               const SizedBox(height: 6),
               Text(
                 L.lang == 'en'
-                  ? "Dr. MeowScan needs 2 scans of each type"
-                  : "El Dr. MeowScan necesita 2 escaneos de cada tipo",
-                style: _nunito(13, kMuted), textAlign: TextAlign.center),
+                  ? "Dr. MeowScan is building your pet's clinical profile"
+                  : "El Dr. MeowScan está construyendo el perfil clínico",
+                style: _nunito(13, kMuted),
+                textAlign: TextAlign.center),
             ])),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
 
-          // Overall progress
+          // Progress card
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             decoration: kCardDeco(border: kPurple.withOpacity(0.2)),
             child: Column(children: [
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text(L.lang == 'en' ? "Overall progress" : "Progreso general",
+                Text(
+                  L.lang == 'en' ? "Scans collected" : "Escaneos recopilados",
                   style: _nunito(14, kText, weight: FontWeight.w700)),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(colors: [kPurple, Color(0xFFA855F7)]),
                     borderRadius: BorderRadius.circular(20)),
-                  child: Text("$completados / 5 ${L.lang == 'en' ? 'types' : 'tipos'}",
+                  child: Text("$actual / $total",
                     style: _nunito(13, Colors.white, weight: FontWeight.w900))),
               ]),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
+              // Progress bar
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: LinearProgressIndicator(
-                  value: completados / 5,
+                  value: pct,
                   minHeight: 14,
                   backgroundColor: kPurple.withOpacity(0.1),
-                  valueColor: const AlwaysStoppedAnimation<Color>(kPurple))),
+                  valueColor: AlwaysStoppedAnimation<Color>(kPurple))),
+              const SizedBox(height: 16),
+              // Missing scans badge
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: kYellow.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: kYellow.withOpacity(0.4))),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  const Text("⏳", style: TextStyle(fontSize: 20)),
+                  const SizedBox(width: 10),
+                  Text(
+                    L.lang == 'en'
+                      ? "$faltan more scan${faltan == 1 ? '' : 's'} to unlock"
+                      : "Faltan $faltan escaneo${faltan == 1 ? '' : 's'} más 🐾",
+                    style: _nunito(15, kText, weight: FontWeight.w800)),
+                ])),
             ])),
 
           const SizedBox(height: 16),
 
-          // Per-type progress grid
+          // Scan types info card
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: kCardDeco(border: kTurquoise.withOpacity(0.2)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(L.lang == 'en' ? "📊 Progress by scan type" : "📊 Progreso por tipo de escaneo",
+              Text(
+                L.lang == 'en' ? "💡 All scan types count!" : "💡 ¡Todos los escaneos cuentan!",
                 style: _nunito(14, kTurquoise, weight: FontWeight.w800)),
-              const SizedBox(height: 16),
-              ...tipos.map((t) {
-                final cnt = conteo[t] ?? 0;
-                final done = cnt >= 2;
-                final emoji = emojis[t]!;
-                final nombre = L.lang == 'en' ? nombres_en[t]! : nombres_es[t]!;
-                final color = done ? kGreen : (cnt == 1 ? kYellow : kCoral);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(children: [
-                    Text(emoji, style: const TextStyle(fontSize: 20)),
-                    const SizedBox(width: 10),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        Text(nombre, style: _nunito(13, kText, weight: FontWeight.w700)),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: color.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: color.withOpacity(0.4))),
-                          child: Text(
-                            done ? (L.lang == 'en' ? "✓ Done" : "✓ Listo") : "$cnt / 2",
-                            style: _nunito(11, color, weight: FontWeight.w800))),
-                      ]),
-                      const SizedBox(height: 4),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: LinearProgressIndicator(
-                          value: (cnt / 2).clamp(0.0, 1.0),
-                          minHeight: 8,
-                          backgroundColor: color.withOpacity(0.1),
-                          valueColor: AlwaysStoppedAnimation<Color>(color))),
-                    ])),
-                  ]));
-              }).toList(),
+              const SizedBox(height: 12),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                _scanTypeBadge("🔍", L.lang == 'en' ? "General" : "General", kTurquoise),
+                _scanTypeBadge("🤮", L.lang == 'en' ? "Vomit" : "Vómito", kPurple),
+                _scanTypeBadge("🫁", L.lang == 'en' ? "Breathing" : "Respiración", const Color(0xFF00B894)),
+                _scanTypeBadge("🐾", L.lang == 'en' ? "Spasms" : "Espasmos", kCoral),
+                _scanTypeBadge("👅", L.lang == 'en' ? "Gums" : "Encías", const Color(0xFFFF6B9D)),
+                _scanTypeBadge("😿", L.lang == 'en' ? "Meow" : "Maullido", kPurple),
+              ]),
+              const SizedBox(height: 12),
+              Text(
+                L.lang == 'en'
+                  ? "Every scan adds to Dr. MeowScan's knowledge about your pet's health. Scan regularly for the best results!"
+                  : "Cada escaneo aporta datos clínicos valiosos. ¡Escanea regularmente para mejores resultados!",
+                style: _nunito(12, kMuted)),
             ])),
 
           const SizedBox(height: 20),
@@ -5219,14 +5027,12 @@ class EnciasScreen extends StatelessWidget {
       required this.serverIp, required this.cat,
       required this.user, required this.onComplete}) : super(key: key);
   @override
-  Widget build(BuildContext context) => _VideoScanBase(
+  Widget build(BuildContext context) => _MedicoScanBase(
     cameras: cameras, serverIp: serverIp,
-    endpoint: "analizar_video_encias",
-    titulo: L.get('scan_gums_title'), emoji: "🦷",
-    instruccion: L.lang == 'en'
-      ? "Gently lift ${cat.name}\'s lip to show the gums clearly. Hold steady for 30 seconds."
-      : "Levanta suavemente el labio de ${cat.name} para mostrar las encías. Mantén firme 30 segundos.",
-    duracion: 30, cat: cat, user: user, onComplete: onComplete);
+    endpoint: "analizar_encias",
+    titulo: L.get('scan_gums_title'), emoji: "👅",
+    instruccion: "${L.get('lift_lip')}\nde ${cat.name}",
+    duracion: 1, cat: cat, user: user, onComplete: onComplete);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -5318,7 +5124,6 @@ class _MaullidoScreenState extends State<MaullidoScreen> {
       final res   = await http.post(uri,
         headers: {"Content-Type": "application/json", "X-API-Key": kApiKey},
         body: json.encode({
-          "lang":          L.lang,
           "descripcion":   desc,
           "duracion_seg":  _secs.toDouble(),
           "intensidad_db": avgDb,
@@ -5530,7 +5335,7 @@ class MaullidoResultScreen extends StatelessWidget {
                 decoration: kCardDeco(radius: 14),
                 child: const Icon(Icons.home_rounded, color: kPurple, size: 22))),
             const SizedBox(width: 12),
-              Expanded(child: kTitle("$emoji ${L.get('meow_analysis')}", size: 18)),
+            Expanded(child: kTitle("$emoji Análisis de Maullido", size: 18)),
           ]),
           const SizedBox(height: 16),
 
@@ -5712,25 +5517,14 @@ class VetAppointmentsScreen extends StatefulWidget {
 }
 
 class _VetAppointmentsScreenState extends State<VetAppointmentsScreen> {
-  late List<VetAppointment> _appts;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAppts();
-  }
-
-  void _loadAppts() {
-    _appts = widget.user.appointments
-        .where((a) => a.catId == widget.cat.id)
-        .toList()..sort((a, b) => a.date.compareTo(b.date));
-  }
+  List<VetAppointment> get _appts => widget.user.appointments
+      .where((a) => a.catId == widget.cat.id)
+      .toList()..sort((a, b) => a.date.compareTo(b.date));
 
   Future<void> _save() async {
     await StorageService.saveAppointments(widget.user.appointments);
-    await FirestoreService.saveAppointments(widget.user.appointments);
-    if (mounted) setState(() => _loadAppts());
     widget.onRefresh();
+    if (mounted) setState(() {});
   }
 
   Future<void> _showAddSheet([VetAppointment? existing]) async {
@@ -5830,8 +5624,9 @@ class _VetAppointmentsScreenState extends State<VetAppointmentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final upcoming = _appts.where((a) => !a.completed && a.date.isAfter(DateTime.now())).toList();
-    final past     = _appts.where((a) => a.completed || a.date.isBefore(DateTime.now())).toList();
+    final appts   = _appts;
+    final upcoming = appts.where((a) => !a.completed && a.date.isAfter(DateTime.now())).toList();
+    final past     = appts.where((a) => a.completed || a.date.isBefore(DateTime.now())).toList();
 
     return Scaffold(
       backgroundColor: kBg,
@@ -5859,7 +5654,7 @@ class _VetAppointmentsScreenState extends State<VetAppointmentsScreen> {
                 child: Text(L.lang == 'en' ? "+ New" : "+ Nueva",
                   style: _nunito(13, Colors.white, weight: FontWeight.w800)))),
           ])),
-        Expanded(child: _appts.isEmpty
+        Expanded(child: appts.isEmpty
           ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
               const Text("🏥", style: TextStyle(fontSize: 56)),
               const SizedBox(height: 16),
@@ -5961,25 +5756,24 @@ class _VetAppointmentsScreenState extends State<VetAppointmentsScreen> {
               onTap: () async {
                 final confirm = await showDialog<bool>(
                   context: context,
-                  builder: (dialogCtx) => AlertDialog(
+                  builder: (_) => AlertDialog(
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     title: Text(L.get('delete_confirm'), style: _nunito(16, kText, weight: FontWeight.w800)),
-                    content: Text(L.get('delete_appt_q'), style: _nunito(14, kMuted)),
+                    content: Text('¿Eliminar esta cita?', style: _nunito(14, kMuted)),
                     actions: [
-                      TextButton(onPressed: () => Navigator.of(dialogCtx).pop(false),
+                      TextButton(onPressed: () => Navigator.pop(context, false),
                         child: Text(L.get('cancel_delete'), style: _nunito(14, kMuted))),
-                      ElevatedButton(onPressed: () => Navigator.of(dialogCtx).pop(true),
+                      ElevatedButton(onPressed: () => Navigator.pop(context, true),
                         style: ElevatedButton.styleFrom(backgroundColor: kCoral,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                         child: Text(L.get('delete'), style: _nunito(14, Colors.white, weight: FontWeight.w700))),
                     ]));
                 if (confirm == true) {
-                  widget.user.appointments.removeWhere((x) => x.id == a.id);
-                  await FirestoreService.deleteAppointment(a.id);
-                  await StorageService.saveAppointments(widget.user.appointments);
                   await NotificationService.cancelAppointment(a.id);
-                  if (mounted) setState(() => _loadAppts());
-                  widget.onRefresh();
+                  setState(() {
+                    widget.user.appointments.removeWhere((x) => x.id == a.id);
+                  });
+                  await _save();
                 }
               },
               child: const Icon(Icons.delete_outline_rounded, color: kCoral, size: 18)),
@@ -6001,25 +5795,14 @@ class MedicationsScreen extends StatefulWidget {
 }
 
 class _MedicationsScreenState extends State<MedicationsScreen> {
-  late List<Medication> _meds;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadMeds();
-  }
-
-  void _loadMeds() {
-    _meds = widget.user.medications
-        .where((m) => m.catId == widget.cat.id)
-        .toList()..sort((a, b) => a.name.compareTo(b.name));
-  }
+  List<Medication> get _meds => widget.user.medications
+      .where((m) => m.catId == widget.cat.id)
+      .toList()..sort((a, b) => a.name.compareTo(b.name));
 
   Future<void> _save() async {
     await StorageService.saveMedications(widget.user.medications);
-    await FirestoreService.saveMedications(widget.user.medications);
-    if (mounted) setState(() => _loadMeds());
     widget.onRefresh();
+    if (mounted) setState(() {});
   }
 
   Future<void> _showAddSheet([Medication? existing]) async {
@@ -6246,27 +6029,25 @@ class _MedicationsScreenState extends State<MedicationsScreen> {
             onTap: () async {
               final confirm = await showDialog<bool>(
                 context: context,
-                builder: (dialogCtx) => AlertDialog(
+                builder: (_) => AlertDialog(
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   title: Text(L.get('delete_confirm'), style: _nunito(16, kText, weight: FontWeight.w800)),
-                  content: Text(L.lang == 'en' ? 'Delete this medication?' : '¿Eliminar este medicamento?', style: _nunito(14, kMuted)),
+                  content: Text('¿Eliminar este medicamento?', style: _nunito(14, kMuted)),
                   actions: [
-                    TextButton(onPressed: () => Navigator.of(dialogCtx).pop(false),
+                    TextButton(onPressed: () => Navigator.pop(context, false),
                       child: Text(L.get('cancel_delete'), style: _nunito(14, kMuted))),
-                    ElevatedButton(onPressed: () => Navigator.of(dialogCtx).pop(true),
+                    ElevatedButton(onPressed: () => Navigator.pop(context, true),
                       style: ElevatedButton.styleFrom(backgroundColor: kCoral,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                       child: Text(L.get('delete'), style: _nunito(14, Colors.white, weight: FontWeight.w700))),
                   ]));
               if (confirm == true) {
-                widget.user.medications.removeWhere((x) => x.id == m.id);
-                await FirestoreService.deleteMedication(m.id);
-                await StorageService.saveMedications(widget.user.medications);
                 await NotificationService.cancelMedication(m.id);
-                if (mounted) setState(() => _loadMeds());
-                widget.onRefresh();
+                setState(() {
+                  widget.user.medications.removeWhere((x) => x.id == m.id);
+                });
+                await _save();
               }
-
             },
             child: const Icon(Icons.delete_outline_rounded, color: kCoral, size: 18)),
         ]),
@@ -6424,7 +6205,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                             fontSize: 28, fontWeight: pw.FontWeight.bold,
                             color: PdfColor.fromHex('#2D3436'))),
                       pw.SizedBox(height: 6),
-                      pw.Text((L.lang == 'en' ? 'Owner: ' : 'Dueño: ') + widget.user.username,
+                      pw.Text('Dueño: ${widget.user.username}',
                         style: pw.TextStyle(
                             fontSize: 14,
                             color: PdfColor.fromHex('#A29BFE'),
@@ -6570,11 +6351,11 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
               const SizedBox(height: 24),
 
               // Campo WhatsApp
-              kLabel(L.get('whatsapp_number').toUpperCase()),
+              kLabel("TU NÚMERO DE WHATSAPP"),
               const SizedBox(height: 10),
               kTextField(
                 _waCtrl,
-                L.get('whatsapp_hint'),
+                'Ej: 573001234567 (con código de país)',
                 icon: Icons.phone_rounded,
                 accent: const Color(0xFF25D366),
               ),
@@ -6597,7 +6378,7 @@ class _QrGeneratorScreenState extends State<QrGeneratorScreen> {
                   decoration: kCardDeco(
                     border: kCoral.withOpacity(0.2)),
                   child: Column(children: [
-                    kTitle(L.get('ready'), size: 20, color: kCoral),
+                    kTitle("¡Listo! 🎉", size: 20, color: kCoral),
                     const SizedBox(height: 6),
                     kBody(
                       "Escanea este QR para ver el perfil de ${widget.cat.name}",
