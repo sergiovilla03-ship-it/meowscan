@@ -77,89 +77,22 @@ CASCADES_URL = {
 # ════════════════════════════════════════════════════════════════
 #  PROMPT MASCOTA — con énfasis en peso real y alertas
 # ════════════════════════════════════════════════════════════════
-PROMPT_ES = """Eres un veterinario experto en animales de compañía con 30 años de experiencia en gatos y perros.
-Analiza esta imagen y responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones.
+PROMPT_ES = """Analiza esta imagen de mascota como veterinario experto. Devuelve JSON con TODOS estos campos:
 
-Primero determina si hay un gato o un perro en la imagen.
-
-INSTRUCCIONES CRÍTICAS PARA EL PESO Y ESTADO CORPORAL:
-- Sé MUY estricto al evaluar el estado corporal. La mayoría de mascotas domésticas tienen sobrepeso.
-- Un gato doméstico promedio saludable pesa entre 3.5 y 4.5 kg. Si se ve grande o redondo, probablemente tiene sobrepeso.
-- Un gato que pesa más de 5 kg casi siempre tiene sobrepeso u obesidad.
-- NO digas "Peso ideal" si el animal se ve robusto, grande o con grasa visible.
-- Usa el sistema BCS (Body Condition Score) del 1 al 9 de forma precisa:
-  * 1-3: Bajo peso (costillas muy visibles, sin grasa)
-  * 4-5: Peso ideal (costillas palpables con poca grasa)
-  * 6-7: Sobrepeso (costillas difíciles de palpar, grasa visible)
-  * 8-9: Obesidad (costillas no palpables, grasa excesiva, abdomen colgante)
-- Si el gato se ve gordo o robusto, asigna BCS 6 o mayor.
-- alerta_peso debe ser true si BCS >= 6
-
-INSTRUCCIONES PARA OREJAS:
-- Si las orejas están aplastadas, hacia atrás con fuerza o en posición de dolor/miedo, alerta_veterinario debe ser true
-- Posiciones de alerta: Aplastadas, Giradas hacia atrás, Pegadas a la cabeza
-
-El JSON debe tener exactamente esta estructura:
 {
-  "mascota_detectada": true o false,
-  "tipo": "gato" o "perro",
-  "raza": {
-    "nombre": "nombre de la raza en español",
-    "confianza": número del 0 al 100,
-    "descripcion": "descripción breve de la raza"
-  },
-  "peso": {
-    "estimado_kg": número decimal MUY preciso según tamaño real del animal,
-    "estimado_lb": número decimal,
-    "rango_min_kg": número decimal,
-    "rango_max_kg": número decimal,
-    "confianza": "Alta, Media o Baja"
-  },
-  "color": {
-    "color_principal": "nombre del color en español",
-    "colores_secundarios": ["color1", "color2"],
-    "patron": "Sólido, Atigrado, Bicolor, Tricolor, Carey, Manchado u otro",
-    "hex_aproximado": "#xxxxxx"
-  },
-  "estado_corporal": {
-    "bcs": número del 1 al 9 MUY PRECISO,
-    "estado": "Bajo peso, Algo delgado, Peso ideal, Sobrepeso u Obesidad",
-    "emoji": "emoji apropiado",
-    "color_hex": "#52C97A para ideal, #FF9800 para sobrepeso/algo delgado, #F44336 para obesidad/bajo peso",
-    "salud_pct": número del 0 al 100,
-    "consejo": "consejo personalizado y empático — si tiene sobrepeso u obesidad menciona dieta específica y ejercicio",
-    "alerta_peso": true si BCS >= 6 o false si BCS <= 5,
-    "mensaje_alerta": "mensaje de alerta si alerta_peso es true, sino null"
-  },
-  "orejas": {
-    "posicion": "Erguidas, Hacia adelante, Hacia atrás, Aplastadas o Relajadas",
-    "estado": "nombre descriptivo del estado",
-    "significado": "qué significa esta posición de orejas",
-    "alerta": true o false,
-    "alerta_veterinario": true si la posición indica dolor o miedo intenso, sino false,
-    "mensaje_veterinario": "mensaje urgente si alerta_veterinario es true, sino null"
-  },
-  "cola": {
-    "posicion": "Alta, Baja, Horizontal, Entre las patas, Moviéndose o No visible",
-    "significado": "qué significa esta posición de cola",
-    "visible": true o false
-  },
-  "gesto": {
-    "nombre": "nombre del estado de ánimo con emoji",
-    "emocion": "Feliz, Relajado, Curioso, Alerta, Asustado, Enojado, Juguetón o Somnoliento",
-    "descripcion": "descripción del comportamiento observado",
-    "nivel_estres": número del 0 al 10,
-    "cola_posicion": "descripción si es visible, sino null"
-  },
-  "salud_visual": {
-    "ojos": "descripción del estado de los ojos",
-    "pelaje": "descripción del estado del pelaje",
-    "observaciones": "cualquier observación de salud relevante"
-  }
+  "mascota_detectada": true,
+  "tipo": "gato",
+  "raza": {"nombre": "nombre exacto de la raza", "confianza": 90, "descripcion": "descripcion breve"},
+  "peso": {"estimado_kg": 4.2, "estimado_lb": 9.3, "rango_min_kg": 3.5, "rango_max_kg": 5.0, "confianza": "Media"},
+  "color": {"color_principal": "naranja", "colores_secundarios": ["blanco"], "patron": "Atigrado", "hex_aproximado": "#FF8C42"},
+  "estado_corporal": {"bcs": 5, "estado": "Peso ideal", "emoji": "🐱", "color_hex": "#52C97A", "salud_pct": 80, "consejo": "consejo nutricional", "alerta_peso": false, "mensaje_alerta": null},
+  "orejas": {"posicion": "Erguidas", "estado": "Alerta", "significado": "significado", "alerta": false, "alerta_veterinario": false, "mensaje_veterinario": null},
+  "cola": {"posicion": "Alta", "significado": "significado", "visible": true},
+  "gesto": {"nombre": "Curioso", "emocion": "Curioso", "descripcion": "descripcion", "nivel_estres": 2, "cola_posicion": null},
+  "salud_visual": {"ojos": "descripcion ojos", "pelaje": "descripcion pelaje", "observaciones": "observaciones"}
 }
 
-Si no hay gato ni perro en la imagen, devuelve: {"mascota_detectada": false}
-Responde SOLO el JSON, nada más."""
+Si no hay mascota: {"mascota_detectada": false}"""
 
 
 # ════════════════════════════════════════════════════════════════
@@ -353,23 +286,22 @@ Responde SOLO el JSON."""
 # 🌐 ENGLISH PROMPTS
 # ══════════════════════════════════════════════════════════════
 
-PROMPT_EN = """You are an expert veterinarian with 30 years of experience in cats and dogs.
-Analyze the image and respond ONLY with valid JSON with this exact structure:
+PROMPT_EN = """Analyze this pet image as an expert veterinarian. Return JSON with ALL these fields:
+
 {
-  "mascota_detectada": true/false,
-  "especie": "gato|perro|otro|no_detectado",
-  "raza_probable": "probable breed",
-  "edad_estimada": "puppy/kitten|young|adult|senior",
-  "condicion_corporal": "underweight|normal|overweight",
-  "estado_general": "healthy|alert|concerning|critical",
-  "ojos": "description of eyes",
-  "pelaje": "description of coat",
-  "postura": "description of posture",
-  "hallazgos": ["list of relevant findings"],
-  "recomendaciones": ["list of recommendations"],
-  "urgencia": "normal|observe|vet_soon|emergency",
-  "mensaje": "friendly message to the owner"
-}"""
+  "mascota_detectada": true,
+  "tipo": "cat",
+  "raza": {"nombre": "exact breed name", "confianza": 90, "descripcion": "brief description"},
+  "peso": {"estimado_kg": 4.2, "estimado_lb": 9.3, "rango_min_kg": 3.5, "rango_max_kg": 5.0, "confianza": "Medium"},
+  "color": {"color_principal": "orange", "colores_secundarios": ["white"], "patron": "Tabby", "hex_aproximado": "#FF8C42"},
+  "estado_corporal": {"bcs": 5, "estado": "Ideal weight", "emoji": "🐱", "color_hex": "#52C97A", "salud_pct": 80, "consejo": "nutritional advice", "alerta_peso": false, "mensaje_alerta": null},
+  "orejas": {"posicion": "Upright", "estado": "Alert", "significado": "meaning", "alerta": false, "alerta_veterinario": false, "mensaje_veterinario": null},
+  "cola": {"posicion": "High", "significado": "meaning", "visible": true},
+  "gesto": {"nombre": "Curious", "emocion": "Curious", "descripcion": "description", "nivel_estres": 2, "cola_posicion": null},
+  "salud_visual": {"ojos": "eye description", "pelaje": "coat description", "observaciones": "observations"}
+}
+
+If no pet visible: {"mascota_detectada": false}"""
 
 PROMPT_VOMITO_EN = """Act as a veterinarian with 30 years of experience in small animal medicine.
 Analyze the vomit image and respond ONLY with valid JSON:
@@ -625,7 +557,7 @@ class MotorGroq:
         return base64.b64encode(buf.getvalue()).decode("utf-8")
 
     def _extraer_json(self, texto: str) -> dict:
-        """Extrae JSON robusto de respuesta de Gemini con recuperacion de truncamiento."""
+        """Extrae JSON robusto de respuesta de Gemini."""
         import re
         texto = texto.strip()
         # Strip markdown fences
@@ -643,9 +575,6 @@ class MotorGroq:
         end   = texto.rfind("}")
         if start != -1 and end != -1 and end > start:
             texto = texto[start:end+1]
-        elif start != -1:
-            # JSON truncado - intentar reparar
-            texto = texto[start:]
         # Fix Python literals
         texto = texto.replace(": True",  ": true")
         texto = texto.replace(": False", ": false")
@@ -653,85 +582,41 @@ class MotorGroq:
         # Remove trailing commas
         texto = re.sub(r",[ \t\n\r]*}", "}", texto)
         texto = re.sub(r",[ \t\n\r]*]", "]", texto)
-        # Attempt 1: direct parse
         try:
             return json.loads(texto)
-        except Exception as e1:
-            print(f"❌ JSON parse failed: {e1}\nTexto: {texto[:300]}")
-        # Attempt 2: extract fields we care about using regex fallback
-        try:
-            result = {}
-            # mascota_detectada
-            m = re.search(r'"mascota_detectada"\s*:\s*(true|false)', texto)
-            if m: result["mascota_detectada"] = m.group(1) == "true"
-            # tipo
-            m = re.search(r'"tipo"\s*:\s*"([^"]+)"', texto)
-            if m: result["tipo"] = m.group(1)
-            # raza nombre
-            m = re.search(r'"nombre"\s*:\s*"([^"]+)"', texto)
-            if m: result.setdefault("raza", {})["nombre"] = m.group(1)
-            m = re.search(r'"confianza"\s*:\s*(\d+)', texto)
-            if m: result.setdefault("raza", {})["confianza"] = int(m.group(1))
-            m = re.search(r'"descripcion"\s*:\s*"([^"]*)"', texto)
-            if m: result.setdefault("raza", {})["descripcion"] = m.group(1)
-            # peso
-            m = re.search(r'"estimado_kg"\s*:\s*([\d.]+)', texto)
-            if m: result.setdefault("peso", {})["estimado_kg"] = float(m.group(1))
-            m = re.search(r'"estimado_lb"\s*:\s*([\d.]+)', texto)
-            if m: result.setdefault("peso", {})["estimado_lb"] = float(m.group(1))
-            m = re.search(r'"rango_min_kg"\s*:\s*([\d.]+)', texto)
-            if m: result.setdefault("peso", {})["rango_min_kg"] = float(m.group(1))
-            m = re.search(r'"rango_max_kg"\s*:\s*([\d.]+)', texto)
-            if m: result.setdefault("peso", {})["rango_max_kg"] = float(m.group(1))
-            # color
-            m = re.search(r'"color_principal"\s*:\s*"([^"]+)"', texto)
-            if m: result.setdefault("color", {})["color_principal"] = m.group(1)
-            m = re.search(r'"patron"\s*:\s*"([^"]+)"', texto)
-            if m: result.setdefault("color", {})["patron"] = m.group(1)
-            m = re.search(r'"hex_aproximado"\s*:\s*"(#[0-9a-fA-F]{6})"', texto)
-            if m: result.setdefault("color", {})["hex_aproximado"] = m.group(1)
-            # estado_corporal
-            m = re.search(r'"bcs"\s*:\s*(\d+)', texto)
-            if m: result.setdefault("estado_corporal", {})["bcs"] = int(m.group(1))
-            m = re.search(r'"salud_pct"\s*:\s*(\d+)', texto)
-            if m: result.setdefault("estado_corporal", {})["salud_pct"] = int(m.group(1))
-            # orejas posicion
-            m = re.search(r'"posicion"\s*:\s*"([^"]+)"', texto)
-            if m: result.setdefault("orejas", {})["posicion"] = m.group(1)
-            # gesto emocion
-            m = re.search(r'"emocion"\s*:\s*"([^"]+)"', texto)
-            if m: result.setdefault("gesto", {})["emocion"] = m.group(1)
-            if result.get("mascota_detectada") or result.get("raza"):
-                result["mascota_detectada"] = True
-                print(f"✅ Regex fallback recovered {len(result)} fields")
-                return result
-        except Exception as e2:
-            print(f"❌ Regex fallback failed: {e2}")
-        raise ValueError(f"No se pudo parsear el JSON de Gemini")
-    def _llamar_gemini(self, img_b64: str, prompt: str, max_tokens: int = 1500) -> dict:
+        except Exception as e:
+            print(f"❌ JSON parse failed: {e}\nTexto: {texto[:300]}")
+            raise
+    def _llamar_gemini(self, img_b64: str, prompt: str, max_tokens: int = 8192) -> dict:
         img_bytes = base64.b64decode(img_b64)
-        img_part = {"mime_type": "image/jpeg", "data": img_bytes}
-        full_prompt = prompt + "\n\nIMPORTANT: Respond ONLY with valid JSON. No explanations, no markdown, just the JSON object."
-        model = genai.GenerativeModel(
-            "gemini-2.5-flash",
-            generation_config=genai.GenerationConfig(
-                max_output_tokens=max_tokens,
-                temperature=0.1,
-            )
-        )
-        response = model.generate_content([img_part, full_prompt])
-        texto = response.text.strip()
-        print(f"📝 Gemini raw response (first 200): {texto[:200]}")
-        return self._extraer_json(texto)
+        img_part  = {"mime_type": "image/jpeg", "data": img_bytes}
+        # JSON mode = Gemini returns pure JSON, never truncated, no markdown
+        for model_name in ["gemini-2.5-flash-preview-04-17", "gemini-1.5-flash"]:
+            try:
+                model = genai.GenerativeModel(
+                    model_name,
+                    generation_config=genai.GenerationConfig(
+                        max_output_tokens=8192,
+                        temperature=0.1,
+                        response_mime_type="application/json",
+                    )
+                )
+                response = model.generate_content([img_part, prompt])
+                texto = response.text.strip()
+                print(f"📝 Gemini [{model_name}] raw (first 300): {texto[:300]}")
+                return self._extraer_json(texto)
+            except Exception as e:
+                print(f"⚠️ [{model_name}] failed: {e}")
+                continue
+        raise ValueError("All Gemini models failed")
 
-    # ── Analizar mascota ──────────────────────────────────────
     def analizar_con_groq(self, img_bgr: np.ndarray, lang: str = "es") -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
         try:
             prompt = PROMPT_EN if lang == "en" else PROMPT_ES
             return self._llamar_gemini(img_b64, prompt)
-        except json.JSONDecodeError as e:
-            print(f"⚠️ JSON parse error: {e}")
+        except Exception as e:
+            print(f"⚠️ analizar_con_groq error: {e}")
             return self._resultado_fallback()
         except Exception as e:
             print(f"❌ Groq error: {e}")
@@ -1222,8 +1107,7 @@ async def analizar(file: UploadFile = File(...), sesion_id: str = "default", lan
     try:
         resultado = motor.analizar_frame(contenido, lang=lang)
     except Exception as e:
-        print(f"⚠️ analizar_frame error: {e}")
-        resultado = motor._resultado_fallback()
+        raise HTTPException(status_code=400, detail=str(e))
     return JSONResponse(content=resultado)
 
 @app.post("/analizar_vomito")
