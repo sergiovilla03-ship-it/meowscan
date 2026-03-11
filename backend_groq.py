@@ -16,7 +16,6 @@ import tempfile
 import urllib.request
 from io import BytesIO
 from typing import List, Dict, Any, Optional
-from groq import Groq
 import google.generativeai as genai
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Depends, Form
@@ -32,10 +31,9 @@ import time
 # ── Configuración ─────────────────────────────────────────────
 HOST      = "0.0.0.0"
 PORT      = 8000
-GROQ_API_KEY   = os.environ.get("GROQ_API_KEY", "")
-groq_client    = Groq(api_key=GROQ_API_KEY)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-genai.configure(api_key=GEMINI_API_KEY)
+import google.api_core.gapic_v1.client_info as client_info
+genai.configure(api_key=GEMINI_API_KEY, client_options={"api_endpoint": "generativelanguage.googleapis.com"})
 
 # ── Seguridad ─────────────────────────────────────────────────
 # API Key que la app envía en cada request
@@ -79,12 +77,89 @@ CASCADES_URL = {
 # ════════════════════════════════════════════════════════════════
 #  PROMPT MASCOTA — con énfasis en peso real y alertas
 # ════════════════════════════════════════════════════════════════
-PROMPT_ES = """Eres un veterinario experto. Analiza esta imagen de mascota y responde SOLO con JSON válido, sin texto extra.
+PROMPT_ES = """Eres un veterinario experto en animales de compañía con 30 años de experiencia en gatos y perros.
+Analiza esta imagen y responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones.
 
-Formato exacto requerido:
-{"mascota_detectada":true,"tipo":"gato","raza":{"nombre":"nombre raza","confianza":85,"descripcion":"desc breve"},"peso":{"estimado_kg":4.2,"estimado_lb":9.3,"rango_min_kg":3.5,"rango_max_kg":5.0,"confianza":"Media"},"color":{"color_principal":"naranja","colores_secundarios":["blanco"],"patron":"Atigrado","hex_aproximado":"#FF8C42"},"estado_corporal":{"bcs":5,"estado":"Peso ideal","emoji":"🐱","color_hex":"#52C97A","salud_pct":80,"consejo":"consejo nutricional","alerta_peso":false,"mensaje_alerta":null},"orejas":{"posicion":"Erguidas","estado":"Alerta","significado":"descripcion","alerta":false,"alerta_veterinario":false,"mensaje_veterinario":null},"cola":{"posicion":"Alta","significado":"descripcion","visible":true},"gesto":{"nombre":"Curioso","emocion":"Curioso","descripcion":"descripcion","nivel_estres":2,"cola_posicion":null},"salud_visual":{"ojos":"descripcion ojos","pelaje":"descripcion pelaje","observaciones":"observaciones"}}
+Primero determina si hay un gato o un perro en la imagen.
 
-Si no hay mascota: {"mascota_detectada":false}"""
+INSTRUCCIONES CRÍTICAS PARA EL PESO Y ESTADO CORPORAL:
+- Sé MUY estricto al evaluar el estado corporal. La mayoría de mascotas domésticas tienen sobrepeso.
+- Un gato doméstico promedio saludable pesa entre 3.5 y 4.5 kg. Si se ve grande o redondo, probablemente tiene sobrepeso.
+- Un gato que pesa más de 5 kg casi siempre tiene sobrepeso u obesidad.
+- NO digas "Peso ideal" si el animal se ve robusto, grande o con grasa visible.
+- Usa el sistema BCS (Body Condition Score) del 1 al 9 de forma precisa:
+  * 1-3: Bajo peso (costillas muy visibles, sin grasa)
+  * 4-5: Peso ideal (costillas palpables con poca grasa)
+  * 6-7: Sobrepeso (costillas difíciles de palpar, grasa visible)
+  * 8-9: Obesidad (costillas no palpables, grasa excesiva, abdomen colgante)
+- Si el gato se ve gordo o robusto, asigna BCS 6 o mayor.
+- alerta_peso debe ser true si BCS >= 6
+
+INSTRUCCIONES PARA OREJAS:
+- Si las orejas están aplastadas, hacia atrás con fuerza o en posición de dolor/miedo, alerta_veterinario debe ser true
+- Posiciones de alerta: Aplastadas, Giradas hacia atrás, Pegadas a la cabeza
+
+El JSON debe tener exactamente esta estructura:
+{
+  "mascota_detectada": true o false,
+  "tipo": "gato" o "perro",
+  "raza": {
+    "nombre": "nombre de la raza en español",
+    "confianza": número del 0 al 100,
+    "descripcion": "descripción breve de la raza"
+  },
+  "peso": {
+    "estimado_kg": número decimal MUY preciso según tamaño real del animal,
+    "estimado_lb": número decimal,
+    "rango_min_kg": número decimal,
+    "rango_max_kg": número decimal,
+    "confianza": "Alta, Media o Baja"
+  },
+  "color": {
+    "color_principal": "nombre del color en español",
+    "colores_secundarios": ["color1", "color2"],
+    "patron": "Sólido, Atigrado, Bicolor, Tricolor, Carey, Manchado u otro",
+    "hex_aproximado": "#xxxxxx"
+  },
+  "estado_corporal": {
+    "bcs": número del 1 al 9 MUY PRECISO,
+    "estado": "Bajo peso, Algo delgado, Peso ideal, Sobrepeso u Obesidad",
+    "emoji": "emoji apropiado",
+    "color_hex": "#52C97A para ideal, #FF9800 para sobrepeso/algo delgado, #F44336 para obesidad/bajo peso",
+    "salud_pct": número del 0 al 100,
+    "consejo": "consejo personalizado y empático — si tiene sobrepeso u obesidad menciona dieta específica y ejercicio",
+    "alerta_peso": true si BCS >= 6 o false si BCS <= 5,
+    "mensaje_alerta": "mensaje de alerta si alerta_peso es true, sino null"
+  },
+  "orejas": {
+    "posicion": "Erguidas, Hacia adelante, Hacia atrás, Aplastadas o Relajadas",
+    "estado": "nombre descriptivo del estado",
+    "significado": "qué significa esta posición de orejas",
+    "alerta": true o false,
+    "alerta_veterinario": true si la posición indica dolor o miedo intenso, sino false,
+    "mensaje_veterinario": "mensaje urgente si alerta_veterinario es true, sino null"
+  },
+  "cola": {
+    "posicion": "Alta, Baja, Horizontal, Entre las patas, Moviéndose o No visible",
+    "significado": "qué significa esta posición de cola",
+    "visible": true o false
+  },
+  "gesto": {
+    "nombre": "nombre del estado de ánimo con emoji",
+    "emocion": "Feliz, Relajado, Curioso, Alerta, Asustado, Enojado, Juguetón o Somnoliento",
+    "descripcion": "descripción del comportamiento observado",
+    "nivel_estres": número del 0 al 10,
+    "cola_posicion": "descripción si es visible, sino null"
+  },
+  "salud_visual": {
+    "ojos": "descripción del estado de los ojos",
+    "pelaje": "descripción del estado del pelaje",
+    "observaciones": "cualquier observación de salud relevante"
+  }
+}
+
+Si no hay gato ni perro en la imagen, devuelve: {"mascota_detectada": false}
+Responde SOLO el JSON, nada más."""
 
 
 # ════════════════════════════════════════════════════════════════
@@ -278,12 +353,23 @@ Responde SOLO el JSON."""
 # 🌐 ENGLISH PROMPTS
 # ══════════════════════════════════════════════════════════════
 
-PROMPT_EN = """You are an expert veterinarian. Analyze this pet image and respond ONLY with valid JSON, no extra text.
-
-Required exact format:
-{"mascota_detectada":true,"tipo":"cat","raza":{"nombre":"breed name","confianza":85,"descripcion":"brief desc"},"peso":{"estimado_kg":4.2,"estimado_lb":9.3,"rango_min_kg":3.5,"rango_max_kg":5.0,"confianza":"Medium"},"color":{"color_principal":"orange","colores_secundarios":["white"],"patron":"Tabby","hex_aproximado":"#FF8C42"},"estado_corporal":{"bcs":5,"estado":"Ideal weight","emoji":"🐱","color_hex":"#52C97A","salud_pct":80,"consejo":"nutritional advice","alerta_peso":false,"mensaje_alerta":null},"orejas":{"posicion":"Upright","estado":"Alert","significado":"description","alerta":false,"alerta_veterinario":false,"mensaje_veterinario":null},"cola":{"posicion":"High","significado":"description","visible":true},"gesto":{"nombre":"Curious","emocion":"Curious","descripcion":"description","nivel_estres":2,"cola_posicion":null},"salud_visual":{"ojos":"eye description","pelaje":"coat description","observaciones":"observations"}}
-
-If no pet visible: {"mascota_detectada":false}"""
+PROMPT_EN = """You are an expert veterinarian with 30 years of experience in cats and dogs.
+Analyze the image and respond ONLY with valid JSON with this exact structure:
+{
+  "mascota_detectada": true/false,
+  "especie": "gato|perro|otro|no_detectado",
+  "raza_probable": "probable breed",
+  "edad_estimada": "puppy/kitten|young|adult|senior",
+  "condicion_corporal": "underweight|normal|overweight",
+  "estado_general": "healthy|alert|concerning|critical",
+  "ojos": "description of eyes",
+  "pelaje": "description of coat",
+  "postura": "description of posture",
+  "hallazgos": ["list of relevant findings"],
+  "recomendaciones": ["list of recommendations"],
+  "urgencia": "normal|observe|vet_soon|emergency",
+  "mensaje": "friendly message to the owner"
+}"""
 
 PROMPT_VOMITO_EN = """Act as a veterinarian with 30 years of experience in small animal medicine.
 Analyze the vomit image and respond ONLY with valid JSON:
@@ -570,28 +656,27 @@ class MotorGroq:
             print(f"❌ JSON parse failed: {e}\nTexto: {texto[:300]}")
             raise
     def _llamar_gemini(self, img_b64: str, prompt: str, max_tokens: int = 1500) -> dict:
-        """Llama a Groq Vision con la imagen."""
-        response = groq_client.chat.completions.create(
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
-                    {"type": "text", "text": prompt}
-                ]
-            }],
-            max_tokens=max_tokens,
-            temperature=0.1,
+        img_bytes = base64.b64decode(img_b64)
+        img_part = {"mime_type": "image/jpeg", "data": img_bytes}
+        full_prompt = prompt + "\n\nIMPORTANT: Respond ONLY with valid JSON. No explanations, no markdown, just the JSON object."
+        model = genai.GenerativeModel(
+            "gemini-2.5-flash",
+            generation_config=genai.GenerationConfig(
+                max_output_tokens=max_tokens,
+                temperature=0.1,
+            )
         )
-        texto = response.choices[0].message.content.strip()
-        print(f"📝 Groq raw response (first 300): {texto[:300]}")
+        response = model.generate_content([img_part, full_prompt])
+        texto = response.text.strip()
+        print(f"📝 Gemini raw response (first 200): {texto[:200]}")
         return self._extraer_json(texto)
 
+    # ── Analizar mascota ──────────────────────────────────────
     def analizar_con_groq(self, img_bgr: np.ndarray, lang: str = "es") -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
         try:
             prompt = PROMPT_EN if lang == "en" else PROMPT_ES
-            return self._llamar_gemini(img_b64, prompt, max_tokens=2000)
+            return self._llamar_gemini(img_b64, prompt)
         except json.JSONDecodeError as e:
             print(f"⚠️ JSON parse error: {e}")
             return self._resultado_fallback()
@@ -1201,7 +1286,7 @@ Analiza el video y responde SOLO con JSON válido con esta estructura exacta:
   "tipo": "ninguno|temblor_leve|espasmo_muscular|convulsion|movimiento_involuntario",
   "frecuencia": "descripción de cuántas veces ocurre",
   "zona_afectada": "descripción de qué parte del cuerpo",
-  "intensidad": "leve|moderada|severa|no_aplica",
+  "intensidad": "leve|moderada|severa|N/A",
   "posibles_causas": ["lista de posibles causas"],
   "conclusion": "evaluación general",
   "recomendacion": "qué debe hacer el dueño",
@@ -1324,7 +1409,7 @@ async def analizar_video_espasmos(file: UploadFile = File(...), lang: str = Form
             "tipo": "indeterminado",
             "frecuencia": "no determinada",
             "zona_afectada": "no determinada",
-            "intensidad": "no_aplica",
+            "intensidad": "N/A",
             "posibles_causas": [],
             "conclusion": "Análisis incompleto",
             "recomendacion": "Intenta de nuevo",
