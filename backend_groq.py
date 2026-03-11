@@ -16,6 +16,7 @@ import tempfile
 import urllib.request
 from io import BytesIO
 from typing import List, Dict, Any, Optional
+from groq import Groq
 import google.generativeai as genai
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Depends, Form
@@ -31,9 +32,10 @@ import time
 # ── Configuración ─────────────────────────────────────────────
 HOST      = "0.0.0.0"
 PORT      = 8000
+GROQ_API_KEY   = os.environ.get("GROQ_API_KEY", "")
+groq_client    = Groq(api_key=GROQ_API_KEY)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-import google.api_core.gapic_v1.client_info as client_info
-genai.configure(api_key=GEMINI_API_KEY, client_options={"api_endpoint": "generativelanguage.googleapis.com"})
+genai.configure(api_key=GEMINI_API_KEY)
 
 # ── Seguridad ─────────────────────────────────────────────────
 # API Key que la app envía en cada request
@@ -77,22 +79,12 @@ CASCADES_URL = {
 # ════════════════════════════════════════════════════════════════
 #  PROMPT MASCOTA — con énfasis en peso real y alertas
 # ════════════════════════════════════════════════════════════════
-PROMPT_ES = """Analiza esta imagen de mascota como veterinario experto. Devuelve JSON con TODOS estos campos:
+PROMPT_ES = """Eres un veterinario experto. Analiza esta imagen de mascota y responde SOLO con JSON válido, sin texto extra.
 
-{
-  "mascota_detectada": true,
-  "tipo": "gato",
-  "raza": {"nombre": "nombre exacto de la raza", "confianza": 90, "descripcion": "descripcion breve"},
-  "peso": {"estimado_kg": 4.2, "estimado_lb": 9.3, "rango_min_kg": 3.5, "rango_max_kg": 5.0, "confianza": "Media"},
-  "color": {"color_principal": "naranja", "colores_secundarios": ["blanco"], "patron": "Atigrado", "hex_aproximado": "#FF8C42"},
-  "estado_corporal": {"bcs": 5, "estado": "Peso ideal", "emoji": "🐱", "color_hex": "#52C97A", "salud_pct": 80, "consejo": "consejo nutricional", "alerta_peso": false, "mensaje_alerta": null},
-  "orejas": {"posicion": "Erguidas", "estado": "Alerta", "significado": "significado", "alerta": false, "alerta_veterinario": false, "mensaje_veterinario": null},
-  "cola": {"posicion": "Alta", "significado": "significado", "visible": true},
-  "gesto": {"nombre": "Curioso", "emocion": "Curioso", "descripcion": "descripcion", "nivel_estres": 2, "cola_posicion": null},
-  "salud_visual": {"ojos": "descripcion ojos", "pelaje": "descripcion pelaje", "observaciones": "observaciones"}
-}
+Formato exacto requerido:
+{"mascota_detectada":true,"tipo":"gato","raza":{"nombre":"nombre raza","confianza":85,"descripcion":"desc breve"},"peso":{"estimado_kg":4.2,"estimado_lb":9.3,"rango_min_kg":3.5,"rango_max_kg":5.0,"confianza":"Media"},"color":{"color_principal":"naranja","colores_secundarios":["blanco"],"patron":"Atigrado","hex_aproximado":"#FF8C42"},"estado_corporal":{"bcs":5,"estado":"Peso ideal","emoji":"🐱","color_hex":"#52C97A","salud_pct":80,"consejo":"consejo nutricional","alerta_peso":false,"mensaje_alerta":null},"orejas":{"posicion":"Erguidas","estado":"Alerta","significado":"descripcion","alerta":false,"alerta_veterinario":false,"mensaje_veterinario":null},"cola":{"posicion":"Alta","significado":"descripcion","visible":true},"gesto":{"nombre":"Curioso","emocion":"Curioso","descripcion":"descripcion","nivel_estres":2,"cola_posicion":null},"salud_visual":{"ojos":"descripcion ojos","pelaje":"descripcion pelaje","observaciones":"observaciones"}}
 
-Si no hay mascota: {"mascota_detectada": false}"""
+Si no hay mascota: {"mascota_detectada":false}"""
 
 
 # ════════════════════════════════════════════════════════════════
@@ -286,22 +278,12 @@ Responde SOLO el JSON."""
 # 🌐 ENGLISH PROMPTS
 # ══════════════════════════════════════════════════════════════
 
-PROMPT_EN = """Analyze this pet image as an expert veterinarian. Return JSON with ALL these fields:
+PROMPT_EN = """You are an expert veterinarian. Analyze this pet image and respond ONLY with valid JSON, no extra text.
 
-{
-  "mascota_detectada": true,
-  "tipo": "cat",
-  "raza": {"nombre": "exact breed name", "confianza": 90, "descripcion": "brief description"},
-  "peso": {"estimado_kg": 4.2, "estimado_lb": 9.3, "rango_min_kg": 3.5, "rango_max_kg": 5.0, "confianza": "Medium"},
-  "color": {"color_principal": "orange", "colores_secundarios": ["white"], "patron": "Tabby", "hex_aproximado": "#FF8C42"},
-  "estado_corporal": {"bcs": 5, "estado": "Ideal weight", "emoji": "🐱", "color_hex": "#52C97A", "salud_pct": 80, "consejo": "nutritional advice", "alerta_peso": false, "mensaje_alerta": null},
-  "orejas": {"posicion": "Upright", "estado": "Alert", "significado": "meaning", "alerta": false, "alerta_veterinario": false, "mensaje_veterinario": null},
-  "cola": {"posicion": "High", "significado": "meaning", "visible": true},
-  "gesto": {"nombre": "Curious", "emocion": "Curious", "descripcion": "description", "nivel_estres": 2, "cola_posicion": null},
-  "salud_visual": {"ojos": "eye description", "pelaje": "coat description", "observaciones": "observations"}
-}
+Required exact format:
+{"mascota_detectada":true,"tipo":"cat","raza":{"nombre":"breed name","confianza":85,"descripcion":"brief desc"},"peso":{"estimado_kg":4.2,"estimado_lb":9.3,"rango_min_kg":3.5,"rango_max_kg":5.0,"confianza":"Medium"},"color":{"color_principal":"orange","colores_secundarios":["white"],"patron":"Tabby","hex_aproximado":"#FF8C42"},"estado_corporal":{"bcs":5,"estado":"Ideal weight","emoji":"🐱","color_hex":"#52C97A","salud_pct":80,"consejo":"nutritional advice","alerta_peso":false,"mensaje_alerta":null},"orejas":{"posicion":"Upright","estado":"Alert","significado":"description","alerta":false,"alerta_veterinario":false,"mensaje_veterinario":null},"cola":{"posicion":"High","significado":"description","visible":true},"gesto":{"nombre":"Curious","emocion":"Curious","descripcion":"description","nivel_estres":2,"cola_posicion":null},"salud_visual":{"ojos":"eye description","pelaje":"coat description","observaciones":"observations"}}
 
-If no pet visible: {"mascota_detectada": false}"""
+If no pet visible: {"mascota_detectada":false}"""
 
 PROMPT_VOMITO_EN = """Act as a veterinarian with 30 years of experience in small animal medicine.
 Analyze the vomit image and respond ONLY with valid JSON:
@@ -587,36 +569,31 @@ class MotorGroq:
         except Exception as e:
             print(f"❌ JSON parse failed: {e}\nTexto: {texto[:300]}")
             raise
-    def _llamar_gemini(self, img_b64: str, prompt: str, max_tokens: int = 8192) -> dict:
-        img_bytes = base64.b64decode(img_b64)
-        img_part  = {"mime_type": "image/jpeg", "data": img_bytes}
-        # JSON mode = Gemini returns pure JSON, never truncated, no markdown
-        for model_name in ["gemini-2.5-flash-preview-04-17", "gemini-1.5-flash"]:
-            try:
-                model = genai.GenerativeModel(
-                    model_name,
-                    generation_config=genai.GenerationConfig(
-                        max_output_tokens=8192,
-                        temperature=0.1,
-                        response_mime_type="application/json",
-                    )
-                )
-                response = model.generate_content([img_part, prompt])
-                texto = response.text.strip()
-                print(f"📝 Gemini [{model_name}] raw (first 300): {texto[:300]}")
-                return self._extraer_json(texto)
-            except Exception as e:
-                print(f"⚠️ [{model_name}] failed: {e}")
-                continue
-        raise ValueError("All Gemini models failed")
+    def _llamar_gemini(self, img_b64: str, prompt: str, max_tokens: int = 1500) -> dict:
+        """Llama a Groq Vision con la imagen."""
+        response = groq_client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
+                    {"type": "text", "text": prompt}
+                ]
+            }],
+            max_tokens=max_tokens,
+            temperature=0.1,
+        )
+        texto = response.choices[0].message.content.strip()
+        print(f"📝 Groq raw response (first 300): {texto[:300]}")
+        return self._extraer_json(texto)
 
     def analizar_con_groq(self, img_bgr: np.ndarray, lang: str = "es") -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
         try:
             prompt = PROMPT_EN if lang == "en" else PROMPT_ES
-            return self._llamar_gemini(img_b64, prompt)
-        except Exception as e:
-            print(f"⚠️ analizar_con_groq error: {e}")
+            return self._llamar_gemini(img_b64, prompt, max_tokens=2000)
+        except json.JSONDecodeError as e:
+            print(f"⚠️ JSON parse error: {e}")
             return self._resultado_fallback()
         except Exception as e:
             print(f"❌ Groq error: {e}")
