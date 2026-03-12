@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MeowScan — Política de Privacidad / Privacy Policy</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --coral: #FF6B6B;
+      --purple: #6C5CE7;
+      --turquoise: #4ECDC4;
+      --green: #55EFC4;
+      --yellow: #FFE66D;
+      --bg: #FFF9F0;
+      --text: #2D3436;
+      --muted: #B2BEC3;
+      --card: #FFFFFF;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+    }
+    header {
+      background: linear-gradient(135deg, var(--purple), var(--turquoise));
+      padding: 48px 24px 40px;
+      text-align: center;
+      color: white;
+    }
+    .logo { font-size: 48px; margin-bottom: 8px; }
+    header h1 { font-size: 32px; font-weight: 900; letter-spacing: -1px; }
+    header p { font-size: 14px; opacity: 0.85; margin-top: 6px; }
+    .lang-switch {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin: 24px auto;
+    }
+    .lang-btn {
+      padding: 8px 24px;
+      border-radius: 50px;
+      border: 2px solid var(--purple);
+      background: transparent;
+      color: var(--purple);
+      font-family: 'Nunito', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .lang-btn.active {
+      background: var(--purple);
+      color: white;
+    }
+    .container {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 32px 24px 64px;
+    }
+    .updated {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 32px;
+    }
+    .section {
+      background: var(--card);
+      border-radius: 20px;
+      padding: 28px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 16px rgba(108,92,231,0.07);
+      border-left: 4px solid var(--purple);
+    }
+    .section.coral  { border-left-color: var(--coral); }
+    .section.teal   { border-left-color: var(--turquoise); }
+    .section.green  { border-left-color: var(--green); }
+    .section.yellow { border-left-color: var(--yellow); }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .section-emoji { font-size: 26px; }
+    .section h2 { font-size: 18px; font-weight: 800; color: var(--text); }
+    .section p, .section li { font-size: 14px; color: #636e72; margin-bottom: 8px; }
+    .section ul { padding-left: 20px; }
+    .section li { margin-bottom: 6px; }
+    .highlight {
+      background: linear-gradient(135deg, #f0eeff, #e8f8f7);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--purple);
+      font-weight: 700;
+    }
+    .contact-box {
+      background: linear-gradient(135deg, var(--purple), var(--turquoise));
+      border-radius: 20px;
+      padding: 32px;
+      text-align: center;
+      color: white;
+      margin-top: 32px;
+    }
+    .contact-box h3 { font-size: 20px; font-weight: 900; margin-bottom: 8px; }
+    .contact-box p { font-size: 14px; opacity: 0.9; }
+    .contact-box a { color: var(--yellow); font-weight: 800; text-decoration: none; }
+    footer {
+      text-align: center;
+      padding: 24px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .lang-content { display: none; }
+    .lang-content.active { display: block; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🐱</div>
+  <h1>MeowScan</h1>
+  <p>by Candle Technology</p>
+</header>
+
+<div class="lang-switch">
+  <button class="lang-btn active" onclick="setLang('es')">🇨🇴 Español</button>
+  <button class="lang-btn" onclick="setLang('en')">🇺🇸 English</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!--  ESPAÑOL                                              -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="lang-content active" id="lang-es">
+  <div class="container">
+    <p class="updated">Última actualización: 11 de marzo de 2026</p>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-emoji">📋</span>
+        <h2>Introducción</h2>
+      </div>
+      <p>Bienvenido a <strong>MeowScan</strong>, desarrollado por <strong>Candle Technology</strong>. Esta Política de Privacidad describe cómo recopilamos, usamos y protegemos tu información personal cuando usas nuestra aplicación móvil.</p>
+      <p>Al usar MeowScan, aceptas las prácticas descritas en esta política. Si no estás de acuerdo, por favor no uses la aplicación.</p>
+    </div>
+
+    <div class="section coral">
+      <div class="section-header">
+        <span class="section-emoji">📱</span>
+        <h2>Información que recopilamos</h2>
+      </div>
+      <ul>
+        <li><strong>Información de cuenta:</strong> nombre, correo electrónico y foto de perfil cuando te registras con email o Google</li>
+        <li><strong>Información de mascotas:</strong> nombre, tipo, peso, edad y fotos de tus mascotas</li>
+        <li><strong>Imágenes y videos:</strong> fotos y videos que captures dentro de la app para análisis de IA</li>
+        <li><strong>Historial médico:</strong> escaneos, citas veterinarias y medicamentos que registres</li>
+        <li><strong>Datos de uso:</strong> cómo interactúas con la app para mejorar la experiencia</li>
+      </ul>
+    </div>
+
+    <div class="section teal">
+      <div class="section-header">
+        <span class="section-emoji">🤖</span>
+        <h2>Cómo usamos tu información</h2>
+      </div>
+      <ul>
+        <li>Analizar imágenes y videos de tus mascotas usando inteligencia artificial (Groq y Google Gemini)</li>
+        <li>Almacenar tu historial de escaneos, citas y medicamentos en la nube</li>
+        <li>Enviarte recordatorios de medicamentos y citas veterinarias</li>
+        <li>Generar reportes PDF de los análisis</li>
+        <li>Mejorar la precisión de nuestros modelos de IA</li>
+      </ul>
+      <div class="highlight">⚠️ MeowScan es una herramienta de apoyo. Los análisis de IA NO reemplazan el diagnóstico de un veterinario profesional.</div>
+    </div>
+
+    <div class="section green">
+      <div class="section-header">
+        <span class="section-emoji">☁️</span>
+        <h2>Terceros y servicios externos</h2>
+      </div>
+      <p>MeowScan utiliza los siguientes servicios de terceros:</p>
+      <ul>
+        <li><strong>Firebase (Google):</strong> autenticación, almacenamiento de datos y notificaciones</li>
+        <li><strong>Groq AI:</strong> análisis de imágenes con inteligencia artificial</li>
+        <li><strong>Google Gemini:</strong> análisis de videos de respiración, espasmos y encías</li>
+        <li><strong>Google Maps:</strong> búsqueda de clínicas veterinarias cercanas</li>
+        <li><strong>Resend:</strong> envío de correos electrónicos</li>
+      </ul>
+      <p>Cada uno de estos servicios tiene su propia política de privacidad. Las imágenes enviadas para análisis pueden ser procesadas por servidores externos.</p>
+    </div>
+
+    <div class="section yellow">
+      <div class="section-header">
+        <span class="section-emoji">🔐</span>
+        <h2>Seguridad de tus datos</h2>
+      </div>
+      <ul>
+        <li>Tus datos se almacenan en Firebase con autenticación segura</li>
+        <li>Solo tú puedes acceder a los datos de tu cuenta</li>
+        <li>Las comunicaciones con nuestro servidor usan HTTPS con autenticación por API Key</li>
+        <li>No vendemos ni compartimos tu información personal con terceros con fines comerciales</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-emoji">👶</span>
+        <h2>Menores de edad</h2>
+      </div>
+      <p>MeowScan no está dirigida a menores de 13 años. No recopilamos intencionalmente información de niños menores de 13 años. Si eres padre o tutor y crees que tu hijo ha proporcionado información personal, contáctanos para eliminarla.</p>
+    </div>
+
+    <div class="section coral">
+      <div class="section-header">
+        <span class="section-emoji">🗑️</span>
+        <h2>Tus derechos</h2>
+      </div>
+      <ul>
+        <li><strong>Acceso:</strong> puedes ver toda tu información dentro de la app</li>
+        <li><strong>Eliminación:</strong> puedes eliminar tu cuenta y todos tus datos desde Configuración → Eliminar cuenta</li>
+        <li><strong>Portabilidad:</strong> puedes exportar tus análisis en formato PDF</li>
+        <li><strong>Corrección:</strong> puedes editar tu información de perfil en cualquier momento</li>
+      </ul>
+    </div>
+
+    <div class="section teal">
+      <div class="section-header">
+        <span class="section-emoji">🔔</span>
+        <h2>Permisos de la aplicación</h2>
+      </div>
+      <ul>
+        <li><strong>Cámara:</strong> para capturar fotos y videos de tus mascotas</li>
+        <li><strong>Micrófono:</strong> para grabar maullidos y sonidos de tus mascotas</li>
+        <li><strong>Notificaciones:</strong> para recordatorios de medicamentos y citas</li>
+        <li><strong>Ubicación:</strong> para encontrar clínicas veterinarias cercanas (solo cuando lo solicitas)</li>
+        <li><strong>Almacenamiento:</strong> para guardar fotos y reportes PDF</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-emoji">📝</span>
+        <h2>Cambios a esta política</h2>
+      </div>
+      <p>Podemos actualizar esta política ocasionalmente. Te notificaremos sobre cambios significativos a través de la app o por correo electrónico. El uso continuado de MeowScan después de los cambios constituye tu aceptación de la nueva política.</p>
+    </div>
+
+    <div class="contact-box">
+      <h3>📬 ¿Preguntas?</h3>
+      <p>Si tienes preguntas sobre esta política de privacidad, contáctanos en:</p>
+      <p style="margin-top:12px"><a href="mailto:privacy@candletechnology.co">privacy@candletechnology.co</a></p>
+      <p style="margin-top:8px; font-size:13px; opacity:0.8">Candle Technology — Cúcuta, Colombia</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!--  ENGLISH                                              -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="lang-content" id="lang-en">
+  <div class="container">
+    <p class="updated">Last updated: March 11, 2026</p>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-emoji">📋</span>
+        <h2>Introduction</h2>
+      </div>
+      <p>Welcome to <strong>MeowScan</strong>, developed by <strong>Candle Technology</strong>. This Privacy Policy describes how we collect, use, and protect your personal information when you use our mobile application.</p>
+      <p>By using MeowScan, you agree to the practices described in this policy. If you disagree, please do not use the application.</p>
+    </div>
+
+    <div class="section coral">
+      <div class="section-header">
+        <span class="section-emoji">📱</span>
+        <h2>Information we collect</h2>
+      </div>
+      <ul>
+        <li><strong>Account information:</strong> name, email address and profile photo when you register with email or Google</li>
+        <li><strong>Pet information:</strong> name, type, weight, age and photos of your pets</li>
+        <li><strong>Images and videos:</strong> photos and videos captured within the app for AI analysis</li>
+        <li><strong>Medical history:</strong> scans, vet appointments and medications you record</li>
+        <li><strong>Usage data:</strong> how you interact with the app to improve the experience</li>
+      </ul>
+    </div>
+
+    <div class="section teal">
+      <div class="section-header">
+        <span class="section-emoji">🤖</span>
+        <h2>How we use your information</h2>
+      </div>
+      <ul>
+        <li>Analyze images and videos of your pets using artificial intelligence (Groq and Google Gemini)</li>
+        <li>Store your scan history, appointments and medications in the cloud</li>
+        <li>Send you medication and vet appointment reminders</li>
+        <li>Generate PDF reports of analyses</li>
+        <li>Improve the accuracy of our AI models</li>
+      </ul>
+      <div class="highlight">⚠️ MeowScan is a support tool. AI analyses do NOT replace diagnosis by a professional veterinarian.</div>
+    </div>
+
+    <div class="section green">
+      <div class="section-header">
+        <span class="section-emoji">☁️</span>
+        <h2>Third parties and external services</h2>
+      </div>
+      <p>MeowScan uses the following third-party services:</p>
+      <ul>
+        <li><strong>Firebase (Google):</strong> authentication, data storage and notifications</li>
+        <li><strong>Groq AI:</strong> image analysis with artificial intelligence</li>
+        <li><strong>Google Gemini:</strong> video analysis for breathing, spasms and gums</li>
+        <li><strong>Google Maps:</strong> finding nearby veterinary clinics</li>
+        <li><strong>Resend:</strong> sending emails</li>
+      </ul>
+      <p>Each of these services has its own privacy policy. Images sent for analysis may be processed by external servers.</p>
+    </div>
+
+    <div class="section yellow">
+      <div class="section-header">
+        <span class="section-emoji">🔐</span>
+        <h2>Data security</h2>
+      </div>
+      <ul>
+        <li>Your data is stored in Firebase with secure authentication</li>
+        <li>Only you can access your account data</li>
+        <li>Communications with our server use HTTPS with API Key authentication</li>
+        <li>We do not sell or share your personal information with third parties for commercial purposes</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-emoji">👶</span>
+        <h2>Children</h2>
+      </div>
+      <p>MeowScan is not directed at children under 13. We do not knowingly collect information from children under 13. If you are a parent or guardian and believe your child has provided personal information, contact us to have it removed.</p>
+    </div>
+
+    <div class="section coral">
+      <div class="section-header">
+        <span class="section-emoji">🗑️</span>
+        <h2>Your rights</h2>
+      </div>
+      <ul>
+        <li><strong>Access:</strong> you can view all your information within the app</li>
+        <li><strong>Deletion:</strong> you can delete your account and all data from Settings → Delete account</li>
+        <li><strong>Portability:</strong> you can export your analyses in PDF format</li>
+        <li><strong>Correction:</strong> you can edit your profile information at any time</li>
+      </ul>
+    </div>
+
+    <div class="section teal">
+      <div class="section-header">
+        <span class="section-emoji">🔔</span>
+        <h2>App permissions</h2>
+      </div>
+      <ul>
+        <li><strong>Camera:</strong> to capture photos and videos of your pets</li>
+        <li><strong>Microphone:</strong> to record meows and sounds from your pets</li>
+        <li><strong>Notifications:</strong> for medication and appointment reminders</li>
+        <li><strong>Location:</strong> to find nearby veterinary clinics (only when requested)</li>
+        <li><strong>Storage:</strong> to save photos and PDF reports</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-emoji">📝</span>
+        <h2>Changes to this policy</h2>
+      </div>
+      <p>We may update this policy occasionally. We will notify you of significant changes through the app or by email. Continued use of MeowScan after changes constitutes your acceptance of the new policy.</p>
+    </div>
+
+    <div class="contact-box">
+      <h3>📬 Questions?</h3>
+      <p>If you have questions about this privacy policy, contact us at:</p>
+      <p style="margin-top:12px"><a href="mailto:privacy@candletechnology.co">privacy@candletechnology.co</a></p>
+      <p style="margin-top:8px; font-size:13px; opacity:0.8">Candle Technology — Cúcuta, Colombia</p>
+    </div>
+  </div>
+</div>
+
+<footer>
+  © 2026 Candle Technology · MeowScan · Todos los derechos reservados / All rights reserved
+</footer>
+
+<script>
+  function setLang(lang) {
+    document.querySelectorAll('.lang-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.lang-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById('lang-' + lang).classList.add('active');
+    event.target.classList.add('active');
+  }
+</script>
+
+</body>
+</html>
