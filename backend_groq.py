@@ -1509,6 +1509,53 @@ Califica del 1 al 10: 1-3=muy malo (rellenos dañinos), 4-5=malo, 6-7=aceptable,
         })
 
 
+@app.post("/vetbot")
+async def vetbot(request: Request):
+    """VetBot — Dr. MeowScan con Groq llama-4-scout"""
+    try:
+        body = await request.json()
+        messages  = body.get("messages", [])
+        system    = body.get("system", "")
+        lang      = body.get("lang", "es")
+
+        # Build Groq messages
+        groq_messages = []
+        for m in messages:
+            role    = m.get("role", "user")
+            content = m.get("content", "")
+            if role in ("user", "assistant") and content:
+                groq_messages.append({"role": role, "content": content})
+
+        # Need at least one message
+        if not groq_messages:
+            return JSONResponse(content={"reply": "Hola, ¿en qué puedo ayudarte?" if lang == "es" else "Hello, how can I help you?"})
+
+        response = groq_client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[
+                {"role": "system", "content": system},
+                *groq_messages,
+            ],
+            max_tokens=400,
+            temperature=0.7,
+        )
+
+        reply = response.choices[0].message.content.strip()
+        print(f"🩺 VetBot reply: {reply[:100]}")
+        return JSONResponse(content={"reply": reply})
+
+    except Exception as e:
+        print(f"❌ VetBot error: {e}")
+        lang = "es"
+        try:
+            body = await request.json()
+            lang = body.get("lang", "es")
+        except: pass
+        return JSONResponse(content={
+            "reply": "Disculpa, tuve un problema. Intenta de nuevo." if lang == "es" else "Sorry, I had an issue. Please try again."
+        })
+
+
 @app.get("/modelos_gemini")
 async def listar_modelos():
     """Lista los modelos Gemini disponibles"""

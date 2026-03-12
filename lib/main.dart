@@ -50,6 +50,7 @@ const String kApiKey = String.fromEnvironment(
   defaultValue: 'ms-x9k2p7q4r8t3w6y1',
 );
 
+
 const Color kCoral     = Color(0xFFFF6B6B);   // Coral vibrante
 const Color kCoralLight= Color(0xFFFF8E8E);   // Coral claro
 const Color kTurquoise = Color(0xFF4ECDC4);   // Turquesa
@@ -1354,16 +1355,14 @@ class _NutricionScreenState extends State<NutricionScreen> {
         if (ingredientes.isNotEmpty) _nutCard(
           emoji: '📋',
           titulo: L.lang == 'en' ? 'Main ingredients' : 'Ingredientes principales',
-          body: ingredientes.map((e) => '• $e').join('
-'),
+          body: ingredientes.map((e) => "• $e").join("\n"),
           color: kPurple),
 
         // ── Ingredientes malos ──
         if (malos.isNotEmpty) _nutCard(
           emoji: '⚠️',
           titulo: L.lang == 'en' ? 'Concerning ingredients' : 'Ingredientes preocupantes',
-          body: malos.map((e) => '🔴 $e').join('
-'),
+          body: malos.map((e) => "🔴 $e").join("\n"),
           color: kCoral),
 
         // ── Resumen ──
@@ -1434,6 +1433,403 @@ class _NutricionScreenState extends State<NutricionScreen> {
           const SizedBox(height: 8),
           kBody(body, color: kText, size: 13),
         ])));
+}
+
+
+// ════════════════════════════════════════════════════════════════
+//  🩺 VETBOT TAB — Dr. MeowScan AI Veterinarian
+// ════════════════════════════════════════════════════════════════
+
+class _VetMessage {
+  final String text;
+  final bool isBot;
+  final DateTime time;
+  _VetMessage({required this.text, required this.isBot, required this.time});
+}
+
+class VetBotTab extends StatefulWidget {
+  final UserAccount user;
+  final List<CameraDescription> cameras;
+  const VetBotTab({Key? key, required this.user, required this.cameras}) : super(key: key);
+  @override State<VetBotTab> createState() => _VetBotTabState();
+}
+
+class _VetBotTabState extends State<VetBotTab> {
+  final List<_VetMessage> _messages = [];
+  final TextEditingController _ctrl = TextEditingController();
+  final ScrollController _scroll = ScrollController();
+  bool _loading = false;
+  bool _chatStarted = false;
+
+
+  // Suggestion chips
+  List<String> get _chips => L.lang == 'en' ? [
+    '🍽️ Not eating', '😴 Very sleepy', '🤢 Vomiting',
+    '💧 Not drinking', '🚨 Emergency', '💊 Medications',
+    '🦷 Dental health', '🥗 Best food',
+  ] : [
+    '🍽️ No come', '😴 Muy dormido', '🤢 Vómitos',
+    '💧 No toma agua', '🚨 Emergencia', '💊 Medicamentos',
+    '🦷 Salud dental', '🥗 Mejor alimento',
+  ];
+
+  // Get context from user's recent scans
+  String _buildContext() {
+    final cat = widget.user.cats.isNotEmpty ? widget.user.cats.first : null;
+    final recentScans = widget.user.scans.take(3).toList();
+    String ctx = '';
+    if (cat != null) {
+      ctx += L.lang == 'en'
+        ? 'The user has a pet named ${cat.name}, type: ${cat.tipo}, age: ${cat.edad}. '
+        : 'El usuario tiene una mascota llamada ${cat.name}, tipo: ${cat.tipo}, edad: ${cat.edad}. ';
+    }
+    if (recentScans.isNotEmpty) {
+      ctx += L.lang == 'en' ? 'Recent scans: ' : 'Escaneos recientes: ';
+      for (final s in recentScans) {
+        final tipo = s.resultado['tipo'] ?? 'general';
+        ctx += '$tipo, ';
+      }
+    }
+    return ctx;
+  }
+
+  String get _systemPrompt {
+    final ctx = _buildContext();
+    if (L.lang == 'en') {
+      return """You are Dr. MeowScan, a warm and experienced veterinarian with 20+ years of experience specializing in cats and dogs. You work inside the MeowScan app.
+
+$ctx
+
+Your personality:
+- Warm, empathetic, and reassuring but honest
+- Ask clarifying questions when needed (age, symptoms duration, etc.)
+- Always recommend seeing a real vet for serious symptoms
+- Give practical, actionable advice
+- Use emojis naturally to keep a friendly tone
+- Keep responses concise but complete (max 3-4 sentences per message)
+- NEVER diagnose definitively — always say "could be" or "might indicate"
+- For emergencies, always say to go to the vet IMMEDIATELY
+
+Always respond in English."""
+    } else {
+      return """Eres el Dr. MeowScan, un veterinario cálido y experimentado con más de 20 años de experiencia especializado en gatos y perros. Trabajas dentro de la app MeowScan.
+
+$ctx
+
+Tu personalidad:
+- Cálido, empático y tranquilizador pero honesto
+- Haz preguntas de aclaración cuando sea necesario (edad, duración de síntomas, etc.)
+- Siempre recomienda ver a un veterinario real para síntomas graves
+- Da consejos prácticos y accionables
+- Usa emojis de forma natural para mantener un tono amigable
+- Respuestas concisas pero completas (máx 3-4 oraciones por mensaje)
+- NUNCA diagnostiques definitivamente — siempre di "podría ser" o "podría indicar"
+- Para emergencias, siempre di que vayan al veterinario INMEDIATAMENTE
+
+Siempre responde en español.""";
+    }
+  }
+
+  Future<void> _sendMessage(String text) async {
+    if (text.trim().isEmpty || _loading) return;
+    _ctrl.clear();
+    setState(() {
+      _chatStarted = true;
+      _messages.add(_VetMessage(text: text, isBot: false, time: DateTime.now()));
+      _loading = true;
+    });
+    _scrollToBottom();
+
+    try {
+      // Build messages history for API
+      final apiMessages = <Map<String, dynamic>>[];
+      for (final m in _messages) {
+        if (!m.isBot) {
+          apiMessages.add({'role': 'user', 'content': m.text});
+        } else {
+          apiMessages.add({'role': 'assistant', 'content': m.text});
+        }
+      }
+
+      final ip    = await StorageService.getServerIp();
+      final proto = ip.contains('onrender') || ip.contains('trycloudflare') ? 'https' : 'http';
+      final port  = ip.contains('onrender') || ip.contains('trycloudflare') ? '' : ':8000';
+      final res = await http.post(
+        Uri.parse('$proto://$ip${port}/vetbot'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': kApiKey,
+        },
+        body: json.encode({
+          'messages': apiMessages,
+          'system': _systemPrompt,
+          'lang': L.lang,
+        }),
+      ).timeout(const Duration(seconds: 30));
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        final reply = data['reply'] as String;
+        setState(() {
+          _messages.add(_VetMessage(text: reply, isBot: true, time: DateTime.now()));
+          _loading = false;
+        });
+      } else {
+        _addError();
+      }
+    } catch (e) {
+      _addError();
+    }
+    _scrollToBottom();
+  }
+
+  void _addError() {
+    setState(() {
+      _messages.add(_VetMessage(
+        text: L.lang == 'en'
+          ? '😔 Sorry, I had a connection issue. Please try again.'
+          : '😔 Disculpa, tuve un problema de conexión. Intenta de nuevo.',
+        isBot: true, time: DateTime.now()));
+      _loading = false;
+    });
+  }
+
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scroll.hasClients) {
+        _scroll.animateTo(_scroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+      }
+    });
+  }
+
+  @override
+  void dispose() { _ctrl.dispose(); _scroll.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: kBg,
+    body: SafeArea(child: Column(children: [
+      // ── Header ──
+      Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [kPurple, Color(0xFF4ECDC4)],
+            begin: Alignment.topLeft, end: Alignment.bottomRight),
+          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+          boxShadow: [BoxShadow(color: kPurple.withOpacity(0.3), blurRadius: 16, offset: const Offset(0,4))],
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        child: Row(children: [
+          Container(
+            width: 48, height: 48,
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+            child: const Center(child: Text('🩺', style: TextStyle(fontSize: 24)))),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Dr. MeowScan', style: _nunito(18, Colors.white, weight: FontWeight.w900)),
+            Row(children: [
+              Container(width: 8, height: 8,
+                decoration: const BoxDecoration(color: Color(0xFF55EFC4), shape: BoxShape.circle)),
+              const SizedBox(width: 6),
+              Text(
+                L.lang == 'en' ? 'Online • 20+ years experience' : 'En línea • 20+ años de experiencia',
+                style: _nunito(11, Colors.white.withOpacity(0.85))),
+            ]),
+          ])),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12)),
+            child: Text(
+              L.lang == 'en' ? 'AI Vet' : 'Vet IA',
+              style: _nunito(11, Colors.white, weight: FontWeight.w800))),
+        ])),
+
+      // ── Messages or Welcome ──
+      Expanded(child: !_chatStarted ? _buildWelcome() : _buildChat()),
+
+      // ── Suggestion chips ──
+      if (!_chatStarted) _buildChips(),
+
+      // ── Input ──
+      _buildInput(),
+    ])));
+
+  Widget _buildWelcome() => SingleChildScrollView(
+    padding: const EdgeInsets.all(20),
+    child: Column(children: [
+      const SizedBox(height: 16),
+      Container(
+        padding: const EdgeInsets.all(20),
+        decoration: kCardDeco(),
+        child: Column(children: [
+          const Text('🩺', style: TextStyle(fontSize: 48)),
+          const SizedBox(height: 12),
+          kTitle(
+            L.lang == 'en' ? 'Hello! I'm Dr. MeowScan' : '¡Hola! Soy el Dr. MeowScan',
+            size: 18),
+          const SizedBox(height: 8),
+          kBody(
+            L.lang == 'en'
+              ? 'I'm a veterinarian with 20+ years of experience. Ask me anything about your pet's health, food, behavior or symptoms.'
+              : 'Soy veterinario con más de 20 años de experiencia. Pregúntame cualquier cosa sobre la salud, alimentación, comportamiento o síntomas de tu mascota.',
+            color: kMuted, size: 13),
+        ])),
+      const SizedBox(height: 16),
+      // Recent scan context
+      if (widget.user.scans.isNotEmpty) Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: kPurple.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: kPurple.withOpacity(0.15))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Text('💡', style: TextStyle(fontSize: 16)),
+            const SizedBox(width: 8),
+            kTitle(L.lang == 'en' ? 'Based on your recent scans' : 'Basado en tus escaneos recientes', size: 13),
+          ]),
+          const SizedBox(height: 8),
+          kBody(
+            L.lang == 'en'
+              ? 'I can see your pet's scan history. Ask me about the results!'
+              : '¡Puedo ver el historial de escaneos de tu mascota. Pregúntame sobre los resultados!',
+            color: kMuted, size: 12),
+        ])),
+      const SizedBox(height: 16),
+      kTitle(
+        L.lang == 'en' ? 'Common questions:' : 'Preguntas frecuentes:',
+        size: 14),
+      const SizedBox(height: 8),
+    ]));
+
+  Widget _buildChat() => ListView.builder(
+    controller: _scroll,
+    padding: const EdgeInsets.all(16),
+    itemCount: _messages.length + (_loading ? 1 : 0),
+    itemBuilder: (ctx, i) {
+      if (i == _messages.length) return _buildTyping();
+      final m = _messages[i];
+      return _buildBubble(m);
+    });
+
+  Widget _buildBubble(_VetMessage m) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(
+      mainAxisAlignment: m.isBot ? MainAxisAlignment.start : MainAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (m.isBot) ...[
+          Container(width: 32, height: 32,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [kPurple, Color(0xFF4ECDC4)]),
+              shape: BoxShape.circle),
+            child: const Center(child: Text('🩺', style: TextStyle(fontSize: 16)))),
+          const SizedBox(width: 8),
+        ],
+        Flexible(child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: m.isBot ? Colors.white : kPurple,
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(18),
+              topRight: const Radius.circular(18),
+              bottomLeft: Radius.circular(m.isBot ? 4 : 18),
+              bottomRight: Radius.circular(m.isBot ? 18 : 4)),
+            boxShadow: [BoxShadow(
+              color: (m.isBot ? Colors.black : kPurple).withOpacity(0.08),
+              blurRadius: 8, offset: const Offset(0,2))]),
+          child: Text(m.text,
+            style: _nunito(13, m.isBot ? kText : Colors.white)))),
+        if (!m.isBot) const SizedBox(width: 8),
+      ]));
+
+  Widget _buildTyping() => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(children: [
+      Container(width: 32, height: 32,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(colors: [kPurple, Color(0xFF4ECDC4)]),
+          shape: BoxShape.circle),
+        child: const Center(child: Text('🩺', style: TextStyle(fontSize: 16)))),
+      const SizedBox(width: 8),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(18),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8)]),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          _dot(0), const SizedBox(width: 4),
+          _dot(200), const SizedBox(width: 4),
+          _dot(400),
+        ])),
+    ]));
+
+  Widget _dot(int delay) => TweenAnimationBuilder<double>(
+    tween: Tween(begin: 0, end: 1),
+    duration: Duration(milliseconds: 600 + delay),
+    builder: (_, v, __) => Container(
+      width: 8, height: 8,
+      decoration: BoxDecoration(
+        color: kPurple.withOpacity(0.3 + v * 0.7),
+        shape: BoxShape.circle)));
+
+  Widget _buildChips() => SizedBox(
+    height: 44,
+    child: ListView.builder(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemCount: _chips.length,
+      itemBuilder: (_, i) => Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: GestureDetector(
+          onTap: () => _sendMessage(_chips[i]),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: kPurple.withOpacity(0.2)),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)]),
+            child: Text(_chips[i], style: _nunito(12, kPurple, weight: FontWeight.w700)))))));
+
+  Widget _buildInput() => Container(
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      border: Border(top: BorderSide(color: kMuted.withOpacity(0.2)))),
+    child: Row(children: [
+      Expanded(child: Container(
+        decoration: BoxDecoration(
+          color: kBg, borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: kMuted.withOpacity(0.2))),
+        child: TextField(
+          controller: _ctrl,
+          style: _nunito(13, kText),
+          maxLines: null,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(
+            hintText: L.lang == 'en' ? 'Ask Dr. MeowScan...' : 'Pregúntale al Dr. MeowScan...',
+            hintStyle: _nunito(13, kMuted),
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10)),
+          onSubmitted: _sendMessage))),
+      const SizedBox(width: 8),
+      GestureDetector(
+        onTap: () => _sendMessage(_ctrl.text),
+        child: Container(
+          width: 44, height: 44,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(colors: [kPurple, Color(0xFF4ECDC4)]),
+            shape: BoxShape.circle,
+            boxShadow: [BoxShadow(color: kPurple.withOpacity(0.4), blurRadius: 8, offset: const Offset(0,3))]),
+          child: _loading
+            ? const Padding(padding: EdgeInsets.all(12),
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+            : const Icon(Icons.send_rounded, color: Colors.white, size: 20))),
+    ]));
 }
 
 
@@ -1848,6 +2244,7 @@ class _MainShellState extends State<MainShell> {
     final pages = [
       HomeTab(cameras: widget.cameras, user: _user, onRefresh: _refresh),
       HistoryTab(user: _user, cameras: widget.cameras, onRefresh: _refresh),
+      VetBotTab(user: _user, cameras: widget.cameras),
       ProfileTab(user: _user, cameras: widget.cameras, onRefresh: _refresh),
       SettingsTab(cameras: widget.cameras),
     ];
@@ -1863,6 +2260,7 @@ class _MainShellState extends State<MainShell> {
     final items = [
       ['🏠', L.get('scan_navbar')],
       ['📋', L.get('history')],
+      ['🩺', L.lang == 'en' ? 'VetBot' : 'VetBot'],
       ['🐱', L.get('my_cats')],
       ['⚙️', L.get('settings')],
     ];
