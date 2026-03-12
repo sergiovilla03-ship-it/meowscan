@@ -1133,6 +1133,310 @@ class NotificationService {
 }
 
 
+// ════════════════════════════════════════════════════════════════
+//  🥗 NUTRICION SCREEN — Analizador de Alimento
+// ════════════════════════════════════════════════════════════════
+
+class NutricionScreen extends StatefulWidget {
+  final List<CameraDescription> cameras;
+  final String serverIp;
+  final CatProfile? cat;
+  final UserAccount user;
+  final VoidCallback onComplete;
+  const NutricionScreen({Key? key, required this.cameras,
+    required this.serverIp, this.cat,
+    required this.user, required this.onComplete}) : super(key: key);
+  @override State<NutricionScreen> createState() => _NutricionScreenState();
+}
+
+class _NutricionScreenState extends State<NutricionScreen> {
+  CameraController? _cam;
+  bool _sending = false, _done = false;
+  Map<String, dynamic>? _result;
+  String? _error;
+
+  @override
+  void initState() { super.initState(); _initCam(); }
+
+  Future<void> _initCam() async {
+    _cam = CameraController(widget.cameras.first, ResolutionPreset.high,
+      enableAudio: false, imageFormatGroup: ImageFormatGroup.jpeg);
+    await _cam!.initialize();
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() { _cam?.dispose(); super.dispose(); }
+
+  Future<void> _capture() async {
+    if (_cam == null || !_cam!.value.isInitialized || _sending) return;
+    setState(() { _sending = true; _error = null; });
+    try {
+      final foto  = await _cam!.takePicture();
+      final bytes = await foto.readAsBytes();
+      final ip    = widget.serverIp;
+      final proto = ip.contains('onrender') || ip.contains('trycloudflare') ? 'https' : 'http';
+      final port  = ip.contains('onrender') || ip.contains('trycloudflare') ? '' : ':8000';
+      final uri   = Uri.parse('$proto://$ip${port}/analizar_nutricion');
+      final req   = http.MultipartRequest('POST', uri)
+        ..headers['X-API-Key'] = kApiKey
+        ..fields['lang'] = L.lang
+        ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'food.jpg'));
+      final s   = await req.send().timeout(const Duration(seconds: 30));
+      final res = await http.Response.fromStream(s);
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        // Save to history
+        final scan = ScanRecord(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          catId: widget.cat?.id ?? 'general',
+          date: DateTime.now(),
+          resultado: {...data, 'tipo': 'nutricion'});
+        widget.user.scans.add(scan);
+        await StorageService.saveScans(widget.user.scans);
+        await FirestoreService.saveEscaneos(widget.user.scans);
+        setState(() { _result = data; _done = true; _sending = false; });
+        widget.onComplete();
+      } else {
+        setState(() { _error = 'Error ${res.statusCode}'; _sending = false; });
+      }
+    } catch (e) {
+      setState(() { _error = e.toString(); _sending = false; });
+    }
+  }
+
+  Color _qualityColor(int score) {
+    if (score >= 8) return const Color(0xFF00B894);
+    if (score >= 6) return const Color(0xFF00CEC9);
+    if (score >= 4) return const Color(0xFFFFB347);
+    return kCoral;
+  }
+
+  String _qualityLabel(int score) {
+    if (L.lang == 'en') {
+      if (score >= 8) return 'Excellent';
+      if (score >= 6) return 'Good';
+      if (score >= 4) return 'Regular';
+      return 'Poor';
+    } else {
+      if (score >= 8) return 'Excelente';
+      if (score >= 6) return 'Bueno';
+      if (score >= 4) return 'Regular';
+      return 'Deficiente';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: kBg,
+    body: SafeArea(child: Column(children: [
+      // Header
+      Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(padding: const EdgeInsets.all(10),
+              decoration: kCardDeco(radius: 14),
+              child: const Icon(Icons.arrow_back_ios_new, color: kPurple, size: 18))),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            kTitle(L.lang == 'en' ? '🥗 Food Analyzer' : '🥗 Analizador de Alimento', size: 18),
+            kBody(widget.cat?.name ?? (L.lang == 'en' ? 'General analysis' : 'Análisis general'),
+              color: kMuted, size: 12),
+          ])),
+        ])),
+      Expanded(child: _done ? _buildResult() : _buildCamera()),
+    ])));
+
+  Widget _buildCamera() {
+    if (_cam == null || !_cam!.value.isInitialized) {
+      return const Center(child: CircularProgressIndicator(color: kPurple));
+    }
+    if (_sending) {
+      return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const CircularProgressIndicator(color: const Color(0xFF11998E), strokeWidth: 3),
+        const SizedBox(height: 20),
+        kTitle(L.lang == 'en' ? '🤖 AI analyzing food...' : '🤖 IA analizando alimento...', size: 16),
+        const SizedBox(height: 8),
+        kBody(L.lang == 'en' ? 'Reading ingredients & rating quality' : 'Leyendo ingredientes y calificando calidad',
+          color: kMuted),
+      ]));
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: AspectRatio(
+            aspectRatio: _cam!.value.aspectRatio,
+            child: CameraPreview(_cam!))),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: kCardDeco(),
+          child: Row(children: [
+            const Text('🥗', style: TextStyle(fontSize: 22)),
+            const SizedBox(width: 10),
+            Expanded(child: kBody(
+              L.lang == 'en'
+                ? 'Point the camera at the pet food bag label or ingredient list'
+                : 'Apunta la cámara a la bolsa de alimento o a la lista de ingredientes',
+              color: kText)),
+          ])),
+        const SizedBox(height: 16),
+        if (_error != null) ...[
+          kBody('❌ $_error', color: kCoral),
+          const SizedBox(height: 12),
+        ],
+        SizedBox(width: double.infinity,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.camera_alt_rounded, color: Colors.white),
+            label: Text(
+              L.lang == 'en' ? 'Scan food bag' : 'Escanear bolsa de alimento',
+              style: _nunito(15, Colors.white, weight: FontWeight.w800)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF11998E),
+              padding: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+            onPressed: _capture)),
+      ]));
+  }
+
+  Widget _buildResult() {
+    final r = _result!;
+    final score    = (r['calidad_score'] as num? ?? 5).toInt();
+    final qColor   = _qualityColor(score);
+    final qLabel   = _qualityLabel(score);
+    final malos    = (r['ingredientes_malos'] as List? ?? []);
+    final alternativas = (r['alternativas'] as List? ?? []);
+    final ingredientes = (r['ingredientes_principales'] as List? ?? []);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(children: [
+        // ── Score card ──
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [qColor.withOpacity(0.15), qColor.withOpacity(0.05)],
+              begin: Alignment.topLeft, end: Alignment.bottomRight),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: qColor.withOpacity(0.3))),
+          child: Column(children: [
+            const Text('🥗', style: TextStyle(fontSize: 44)),
+            const SizedBox(height: 12),
+            kTitle(r['marca'] ?? (L.lang == 'en' ? 'Pet food' : 'Alimento'), size: 20),
+            const SizedBox(height: 8),
+            kBody(r['tipo_alimento'] ?? '', color: kMuted, size: 13),
+            const SizedBox(height: 16),
+            // Score circle
+            Container(
+              width: 90, height: 90,
+              decoration: BoxDecoration(
+                color: qColor.withOpacity(0.15),
+                shape: BoxShape.circle,
+                border: Border.all(color: qColor, width: 3)),
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Text('$score/10', style: _nunito(22, qColor, weight: FontWeight.w900)),
+              ])),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              decoration: BoxDecoration(color: qColor, borderRadius: BorderRadius.circular(20)),
+              child: Text(qLabel, style: _nunito(13, Colors.white, weight: FontWeight.w800))),
+          ])),
+        const SizedBox(height: 16),
+
+        // ── Ingredientes principales ──
+        if (ingredientes.isNotEmpty) _nutCard(
+          emoji: '📋',
+          titulo: L.lang == 'en' ? 'Main ingredients' : 'Ingredientes principales',
+          body: ingredientes.map((e) => '• $e').join('
+'),
+          color: kPurple),
+
+        // ── Ingredientes malos ──
+        if (malos.isNotEmpty) _nutCard(
+          emoji: '⚠️',
+          titulo: L.lang == 'en' ? 'Concerning ingredients' : 'Ingredientes preocupantes',
+          body: malos.map((e) => '🔴 $e').join('
+'),
+          color: kCoral),
+
+        // ── Resumen ──
+        if (r['resumen'] != null) _nutCard(
+          emoji: '💡',
+          titulo: L.lang == 'en' ? 'AI Analysis' : 'Análisis IA',
+          body: r['resumen'] ?? '',
+          color: const Color(0xFF11998E)),
+
+        // ── Alternativas ──
+        if (alternativas.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Align(alignment: Alignment.centerLeft,
+              child: kTitle(L.lang == 'en' ? '✨ Better alternatives' : '✨ Mejores alternativas', size: 15))),
+          ...alternativas.map((alt) => Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(16),
+            decoration: kCardDeco(),
+            child: Row(children: [
+              const Text('🏆', style: TextStyle(fontSize: 22)),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                kTitle(alt['nombre'] ?? '', size: 14),
+                const SizedBox(height: 4),
+                kBody(alt['razon'] ?? '', color: kMuted, size: 12),
+              ])),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF11998E).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12)),
+                child: Text('${alt['score'] ?? ''}/10',
+                  style: _nunito(12, const Color(0xFF11998E), weight: FontWeight.w800))),
+            ]))),
+        ],
+
+        const SizedBox(height: 8),
+        SizedBox(width: double.infinity,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.camera_alt_rounded, color: Color(0xFF11998E)),
+            label: Text(
+              L.lang == 'en' ? 'Scan another food' : 'Escanear otro alimento',
+              style: _nunito(14, const Color(0xFF11998E), weight: FontWeight.w700)),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Color(0xFF11998E)),
+              padding: const EdgeInsets.all(14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+            onPressed: () => setState(() { _done = false; _result = null; }))),
+        const SizedBox(height: 20),
+      ]));
+  }
+
+  Widget _nutCard({required String emoji, required String titulo,
+    required String body, required Color color}) =>
+    Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: kCardDeco(),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text(emoji, style: const TextStyle(fontSize: 18)),
+            const SizedBox(width: 8),
+            kTitle(titulo, size: 13),
+          ]),
+          const SizedBox(height: 8),
+          kBody(body, color: kText, size: 13),
+        ])));
+}
+
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
@@ -1702,6 +2006,16 @@ class _HomeTabState extends State<HomeTab> {
               colores: [Color(0xFF6C5CE7), Color(0xFFA855F7)],
               onTap: () => _openMaullido())),
           ]),
+          const SizedBox(height: 12),
+          // ── Nutrition card ──
+          _miniCardWide(
+            emoji: "🥗",
+            titulo: L.lang == 'en' ? 'Food Analyzer' : 'Analizador de Alimento',
+            subtitulo: L.lang == 'en'
+              ? 'Scan your pet food bag — rate quality & get better alternatives'
+              : 'Escanea la bolsa de alimento — califica calidad y obtén alternativas',
+            colores: [Color(0xFF11998E), Color(0xFF38EF7D)],
+            onTap: () => _openNutricion()),
           const SizedBox(height: 24),
           _catSelector(),
           const SizedBox(height: 24),
@@ -1795,6 +2109,30 @@ class _HomeTabState extends State<HomeTab> {
     ),
   );
 
+  Widget _miniCardWide({
+    required String emoji, required String titulo,
+    required String subtitulo, required List<Color> colores,
+    required VoidCallback onTap}) =>
+    GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: colores, begin: Alignment.topLeft, end: Alignment.bottomRight),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: colores[0].withOpacity(0.3), blurRadius: 12, offset: const Offset(0,4))]),
+        child: Row(children: [
+          Text(emoji, style: const TextStyle(fontSize: 36)),
+          const SizedBox(width: 16),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(titulo, style: _nunito(16, Colors.white, weight: FontWeight.w900)),
+            const SizedBox(height: 4),
+            Text(subtitulo, style: _nunito(12, Colors.white.withOpacity(0.85))),
+          ])),
+          const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
+        ])));
+
   Widget _miniCard({required String emoji, required String titulo,
       required String subtitulo, required List<Color> colores,
       required VoidCallback onTap}) =>
@@ -1825,6 +2163,18 @@ class _HomeTabState extends State<HomeTab> {
         ]),
       ),
     );
+
+  void _openNutricion() async {
+    final ok = await Permission.camera.request();
+    if (!ok.isGranted) return;
+    final ip = await StorageService.getServerIp();
+    if (!mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) =>
+      NutricionScreen(
+        cameras: widget.cameras, serverIp: ip,
+        cat: _selected, user: widget.user,
+        onComplete: widget.onRefresh)));
+  }
 
   void _openScan(String tipo) async {
     final ok = await Permission.camera.request();
@@ -2892,7 +3242,8 @@ class _HistoryTabState extends State<HistoryTab> {
       case 'analizar_espasmos':
       case 'espasmos':      return {'emoji': '🐾', 'label': L.get('scan_spasm_title') ?? 'Espasmos', 'color': 0xFFE17055};
       case 'analizar_encias':
-      case 'encias':        return {'emoji': '👅', 'label': L.get('scan_gums_title') ?? 'Encías', 'color': 0xFFFF6B9D};
+      case 'encias':        return {'emoji': '🦷', 'label': L.get('scan_gums_title') ?? 'Encías', 'color': 0xFFFF6B9D};
+      case 'nutricion':     return {'emoji': '🥗', 'label': L.lang == 'en' ? 'Food Analysis' : 'Análisis Nutricional', 'color': 0xFF11998E};
       case 'maullido':      return {'emoji': '😿', 'label': L.get('scan_meow_title') ?? 'Maullido', 'color': 0xFF6C5CE7};
       default:              return {'emoji': '🔍', 'label': L.get('results') ?? 'Escaneo', 'color': 0xFF4ECDC4};
     }

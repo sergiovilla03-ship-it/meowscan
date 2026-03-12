@@ -1415,6 +1415,100 @@ Si no se ven las encías: {"gum_analysis": false, "conclusion": "No se visualiza
         except: pass
 
 
+@app.post("/analizar_nutricion")
+async def analizar_nutricion(file: UploadFile = File(...), lang: str = Form("es")):
+    """Analiza bolsa de alimento para mascotas con Groq Vision"""
+    contenido = await file.read()
+    img_b64   = base64.b64encode(contenido).decode()
+
+    if lang == "en":
+        prompt = """You are an expert veterinary nutritionist. Analyze this pet food bag image.
+Identify the brand, product name, and evaluate the ingredient quality.
+Respond ONLY with valid JSON, no extra text:
+{
+  "alimento_detectado": true,
+  "marca": "brand name",
+  "tipo_alimento": "dry food for adult cats / puppy food / etc",
+  "calidad_score": 7,
+  "ingredientes_principales": ["Chicken", "Rice", "Corn", "..."],
+  "ingredientes_malos": ["Corn syrup (empty calories)", "Artificial colors", "..."],
+  "resumen": "Brief honest analysis of this food quality and what it means for the pet",
+  "alternativas": [
+    {"nombre": "Royal Canin Adult", "razon": "Higher protein, no fillers", "score": 8},
+    {"nombre": "Orijen Cat & Kitten", "razon": "Biologically appropriate, grain free", "score": 9}
+  ]
+}
+If no pet food is visible: {"alimento_detectado": false, "mensaje": "No pet food visible. Please point at the bag label or ingredient list."}
+Rate from 1-10: 1-3=very poor (harmful fillers), 4-5=poor, 6-7=acceptable, 8-9=good, 10=premium."""
+    else:
+        prompt = """Eres un nutricionista veterinario experto. Analiza esta imagen de bolsa de alimento para mascotas.
+Identifica la marca, producto y evalúa la calidad de los ingredientes.
+Responde SOLO con JSON válido, sin texto extra:
+{
+  "alimento_detectado": true,
+  "marca": "nombre de la marca",
+  "tipo_alimento": "alimento seco para gatos adultos / cachorro / etc",
+  "calidad_score": 7,
+  "ingredientes_principales": ["Pollo", "Arroz", "Maíz", "..."],
+  "ingredientes_malos": ["Maíz como primer ingrediente (relleno)", "Colorantes artificiales", "..."],
+  "resumen": "Análisis honesto y breve de la calidad de este alimento y qué significa para la mascota",
+  "alternativas": [
+    {"nombre": "Royal Canin Adult", "razon": "Mayor proteína, sin rellenos", "score": 8},
+    {"nombre": "Hills Science Diet", "razon": "Fórmula veterinaria balanceada", "score": 8}
+  ]
+}
+Si no se ve alimento para mascotas: {"alimento_detectado": false, "mensaje": "No se detecta bolsa de alimento. Apunta a la etiqueta o lista de ingredientes."}
+Califica del 1 al 10: 1-3=muy malo (rellenos dañinos), 4-5=malo, 6-7=aceptable, 8-9=bueno, 10=premium."""
+
+    try:
+        response = groq_client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
+                    {"type": "text", "text": prompt}
+                ]
+            }],
+            max_tokens=1500,
+            temperature=0.3,
+        )
+        texto = response.choices[0].message.content.strip()
+        print(f"📝 Nutricion Groq response: {texto[:300]}")
+
+        # Parse JSON
+        if "```json" in texto:
+            texto = texto.split("```json")[1].split("```")[0].strip()
+        elif "```" in texto:
+            texto = texto.split("```")[1].strip()
+        start = texto.find("{")
+        end   = texto.rfind("}")
+        if start != -1 and end != -1:
+            texto = texto[start:end+1]
+
+        resultado = json.loads(texto)
+        return JSONResponse(content={
+            **resultado,
+            "tipo": "nutricion",
+            "timestamp": time.time(),
+        })
+
+    except Exception as e:
+        print(f"❌ analizar_nutricion error: {e}")
+        return JSONResponse(content={
+            "alimento_detectado": False,
+            "tipo": "nutricion",
+            "marca": "-",
+            "tipo_alimento": "-",
+            "calidad_score": 0,
+            "ingredientes_principales": [],
+            "ingredientes_malos": [],
+            "resumen": "Error al analizar. Intenta de nuevo con mejor iluminación." if lang == "es" else "Analysis error. Try again with better lighting.",
+            "alternativas": [],
+            "timestamp": time.time(),
+        })
+
+
 @app.get("/modelos_gemini")
 async def listar_modelos():
     """Lista los modelos Gemini disponibles"""
