@@ -45,6 +45,10 @@ genai.configure(api_key=GEMINI_API_KEY)
 # ── Seguridad ─────────────────────────────────────────────────
 # API Key que la app envía en cada request
 MEOWSCAN_API_KEY = os.environ.get("MEOWSCAN_API_KEY", "meowscan-secret-2024")
+MAX_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_VIDEO_BYTES = 30 * 1024 * 1024
+MAX_JSON_BODY_BYTES = 256 * 1024
+PUBLIC_PATHS = {"/", "/health", "/perfil"}
 
 # Rate limiting: max requests por IP por ventana de tiempo
 _rate_store: dict = defaultdict(list)
@@ -72,6 +76,35 @@ def check_rate_limit(request: Request):
             status_code=429,
             detail="Too many requests. Please slow down.")
     _rate_store[ip].append(now)
+
+def _is_public_path(path: str) -> bool:
+    return path in PUBLIC_PATHS
+
+async def _read_upload_bytes(file: UploadFile, max_bytes: int, label: str) -> bytes:
+    """Lee archivos con límite duro de tamaño para evitar abuso de memoria."""
+    contenido = await file.read(max_bytes + 1)
+    if len(contenido) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"{label} too large. Limit is {max_bytes // (1024 * 1024)} MB."
+        )
+    if not contenido:
+        raise HTTPException(status_code=400, detail=f"{label} is empty.")
+    return contenido
+
+def _client_error(detail: str = "Invalid request.") -> HTTPException:
+    return HTTPException(status_code=400, detail=detail)
+
+def _server_error() -> HTTPException:
+    return HTTPException(status_code=500, detail="Internal server error.")
+
+def _parse_content_length(value: Optional[str]) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid Content-Length header.")
 
 # ── Cascades Haar ─────────────────────────────────────────────
 CASCADES_URL = {
@@ -1217,6 +1250,15 @@ async def security_middleware(request: Request, call_next):
                "xmlrpc", ".git", "eval(", "<script"]
     if any(b in path for b in blocked):
         return JSONResponse(status_code=404, content={"detail": "Not found"})
+    if request.method != "OPTIONS" and not _is_public_path(path):
+        try:
+            verify_api_key(request.headers.get("X-API-Key"))
+            check_rate_limit(request)
+            content_length = _parse_content_length(request.headers.get("content-length"))
+            if content_length and content_length > MAX_VIDEO_BYTES + 1024:
+                return JSONResponse(status_code=413, content={"detail": "Request too large."})
+        except HTTPException as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
     response = await call_next(request)
     # Security headers
     response.headers["X-Content-Type-Options"]  = "nosniff"
@@ -1260,22 +1302,28 @@ def health():
 async def analizar(file: UploadFile = File(...), sesion_id: str = "default", lang: str = Form("es")):
     if motor is None:
         raise HTTPException(status_code=503, detail="Motor no inicializado")
-    contenido = await file.read()
     try:
+        contenido = await _read_upload_bytes(file, MAX_IMAGE_BYTES, "Image")
         resultado = motor.analizar_frame(contenido, lang=lang)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"❌ analizar error: {e}")
+        raise _client_error()
     return JSONResponse(content=resultado)
 
 @app.post("/analizar_vomito")
 async def analizar_vomito(file: UploadFile = File(...), sesion_id: str = "default", lang: str = Form("es")):
     if motor is None:
         raise HTTPException(status_code=503, detail="Motor no inicializado")
-    contenido = await file.read()
     try:
+        contenido = await _read_upload_bytes(file, MAX_IMAGE_BYTES, "Image")
         resultado = motor.analizar_frame_vomito(contenido, lang=lang)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"❌ analizar_vomito error: {e}")
+        raise _client_error()
     return JSONResponse(content=resultado)
 
 
@@ -1283,22 +1331,28 @@ async def analizar_vomito(file: UploadFile = File(...), sesion_id: str = "defaul
 async def analizar_respiracion(file: UploadFile = File(...), lang: str = Form("es")):
     if motor is None:
         raise HTTPException(status_code=503, detail="Motor no inicializado")
-    contenido = await file.read()
     try:
+        contenido = await _read_upload_bytes(file, MAX_IMAGE_BYTES, "Image")
         resultado = motor.analizar_frame_respiracion(contenido, lang=lang)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"❌ analizar_respiracion error: {e}")
+        raise _client_error()
     return JSONResponse(content=resultado)
 
 @app.post("/analizar_espasmos")
 async def analizar_espasmos(file: UploadFile = File(...), lang: str = Form("es")):
     if motor is None:
         raise HTTPException(status_code=503, detail="Motor no inicializado")
-    contenido = await file.read()
     try:
+        contenido = await _read_upload_bytes(file, MAX_IMAGE_BYTES, "Image")
         resultado = motor.analizar_frame_espasmos(contenido, lang=lang)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"❌ analizar_espasmos error: {e}")
+        raise _client_error()
     return JSONResponse(content=resultado)
 
 class HistoriaRequest(BaseModel):
@@ -1309,11 +1363,14 @@ class HistoriaRequest(BaseModel):
 async def analizar_encias(file: UploadFile = File(...), lang: str = Form("es")):
     if motor is None:
         raise HTTPException(status_code=503, detail="Motor no inicializado")
-    contenido = await file.read()
     try:
+        contenido = await _read_upload_bytes(file, MAX_IMAGE_BYTES, "Image")
         resultado = motor.analizar_frame_encias(contenido, lang=lang)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"❌ analizar_encias error: {e}")
+        raise _client_error()
     return JSONResponse(content=resultado)
 
 
@@ -1339,7 +1396,8 @@ Descripción del sonido detectado: {req.descripcion}
         resultado["intensidad_db"]  = req.intensidad_db
         resultado["timestamp"]      = time.time()
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"❌ analizar_maullido error: {e}")
+        raise _client_error()
     return JSONResponse(content=resultado)
 
 
@@ -1350,7 +1408,8 @@ async def historia_medica(req: HistoriaRequest):
     try:
         resultado = motor.analizar_historia_medica(req.historial, lang=req.lang)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"❌ historia_medica error: {e}")
+        raise _client_error()
     return JSONResponse(content=resultado)
 
 
@@ -1397,7 +1456,7 @@ async def analizar_video_respiracion(file: UploadFile = File(...), lang: str = F
         raise HTTPException(status_code=503, detail="Gemini API key no configurada")
     tmp_path = None
     try:
-        contenido = await file.read()
+        contenido = await _read_upload_bytes(file, MAX_VIDEO_BYTES, "Video")
         print(f"📹 Video recibido: {len(contenido)} bytes")
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
@@ -1452,7 +1511,7 @@ async def analizar_video_respiracion(file: UploadFile = File(...), lang: str = F
         if tmp_path:
             try: os.unlink(tmp_path)
             except: pass
-        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
+        raise _server_error()
 
 
 @app.post("/analizar_video_espasmos")
@@ -1462,7 +1521,7 @@ async def analizar_video_espasmos(file: UploadFile = File(...), lang: str = Form
         raise HTTPException(status_code=503, detail="Gemini API key no configurada")
     tmp_path = None
     try:
-        contenido = await file.read()
+        contenido = await _read_upload_bytes(file, MAX_VIDEO_BYTES, "Video")
         print(f"📹 Video espasmos recibido: {len(contenido)} bytes")
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
@@ -1515,7 +1574,7 @@ async def analizar_video_espasmos(file: UploadFile = File(...), lang: str = Form
         if tmp_path:
             try: os.unlink(tmp_path)
             except: pass
-        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
+        raise _server_error()
 
 @app.post("/analizar_video_encias")
 async def analizar_video_encias(file: UploadFile = File(...), lang: str = Form("es")):
@@ -1523,7 +1582,7 @@ async def analizar_video_encias(file: UploadFile = File(...), lang: str = Form("
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Gemini API key no configurada")
 
-    contenido = await file.read()
+    contenido = await _read_upload_bytes(file, MAX_VIDEO_BYTES, "Video")
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
         tmp.write(contenido)
         tmp_path = tmp.name
@@ -1598,11 +1657,12 @@ Si no se ven las encías: {"gum_analysis": false, "conclusion": "No se visualiza
 @app.post("/analizar_nutricion")
 async def analizar_nutricion(file: UploadFile = File(...), lang: str = Form("es")):
     """Analiza bolsa de alimento para mascotas con Groq Vision"""
-    contenido = await file.read()
-    img_b64   = base64.b64encode(contenido).decode()
+    try:
+        contenido = await _read_upload_bytes(file, MAX_IMAGE_BYTES, "Image")
+        img_b64   = base64.b64encode(contenido).decode()
 
-    if lang == "en":
-        prompt = """You are an expert veterinary nutritionist. Analyze this pet food bag image.
+        if lang == "en":
+            prompt = """You are an expert veterinary nutritionist. Analyze this pet food bag image.
 Identify the brand, product name, and evaluate the ingredient quality.
 Respond ONLY with valid JSON, no extra text:
 {
@@ -1620,8 +1680,8 @@ Respond ONLY with valid JSON, no extra text:
 }
 If no pet food is visible: {"alimento_detectado": false, "mensaje": "No pet food visible. Please point at the bag label or ingredient list."}
 Rate from 1-10: 1-3=very poor (harmful fillers), 4-5=poor, 6-7=acceptable, 8-9=good, 10=premium."""
-    else:
-        prompt = """Eres un nutricionista veterinario experto. Analiza esta imagen de bolsa de alimento para mascotas.
+        else:
+            prompt = """Eres un nutricionista veterinario experto. Analiza esta imagen de bolsa de alimento para mascotas.
 Identifica la marca, producto y evalúa la calidad de los ingredientes.
 Responde SOLO con JSON válido, sin texto extra:
 {
@@ -1640,7 +1700,6 @@ Responde SOLO con JSON válido, sin texto extra:
 Si no se ve alimento para mascotas: {"alimento_detectado": false, "mensaje": "No se detecta bolsa de alimento. Apunta a la etiqueta o lista de ingredientes."}
 Califica del 1 al 10: 1-3=muy malo (rellenos dañinos), 4-5=malo, 6-7=aceptable, 8-9=bueno, 10=premium."""
 
-    try:
         response = groq_client.chat.completions.create(
             model="meta-llama/llama-4-scout-17b-16e-instruct",
             messages=[{
@@ -1673,6 +1732,8 @@ Califica del 1 al 10: 1-3=muy malo (rellenos dañinos), 4-5=malo, 6-7=aceptable,
             "timestamp": time.time(),
         })
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ analizar_nutricion error: {e}")
         return JSONResponse(content={
@@ -1693,6 +1754,9 @@ Califica del 1 al 10: 1-3=muy malo (rellenos dañinos), 4-5=malo, 6-7=aceptable,
 async def vetbot(request: Request):
     """VetBot — Dr. MeowScan con Groq llama-4-scout"""
     try:
+        content_length = _parse_content_length(request.headers.get("content-length"))
+        if content_length and content_length > MAX_JSON_BODY_BYTES:
+            raise _client_error("Request too large.")
         body = await request.json()
         messages  = body.get("messages", [])
         system    = body.get("system", "")
@@ -1724,6 +1788,8 @@ async def vetbot(request: Request):
         print(f"🩺 VetBot reply: {reply[:100]}")
         return JSONResponse(content={"reply": reply})
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"❌ VetBot error: {e}")
         lang = "es"
@@ -1743,7 +1809,8 @@ async def listar_modelos():
         modelos = [m.name for m in genai.list_models()]
         return JSONResponse(content={"modelos": modelos})
     except Exception as e:
-        return JSONResponse(content={"error": str(e)})
+        print(f"❌ listar_modelos error: {e}")
+        raise _server_error()
 
 
 # ════════════════════════════════════════════════════════════════
@@ -1921,15 +1988,12 @@ async def traducir_video(
     lang:   str        = Form("es"),
     tipo:   str        = Form("cat"),
     nombre: str        = Form("Mascota"),
-    _key:   str        = Depends(verify_api_key),
 ):
     """
     Recibe video del gato/perro, genera traducción con IA
     y quema subtítulos + marca de agua con ffmpeg.
     Si ffmpeg no está disponible, devuelve solo JSON con la traducción.
     """
-    check_rate_limit_fn = check_rate_limit  # alias local
-
     job_id    = uuid.uuid4().hex
     tmp_dir   = Path(tempfile.gettempdir()) / "meowscan"
     tmp_dir.mkdir(exist_ok=True)
@@ -1943,7 +2007,7 @@ async def traducir_video(
 
     try:
         # ── 1. Guardar video recibido ──────────────────────────
-        contenido = await video.read()
+        contenido = await _read_upload_bytes(video, MAX_VIDEO_BYTES, "Video")
         in_path.write_bytes(contenido)
         print(f"📹 Video recibido: {len(contenido) / 1024:.1f} KB — {nombre} ({tipo})")
 
