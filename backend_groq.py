@@ -415,7 +415,8 @@ Analyze the medical history of the pet and respond ONLY with valid JSON with thi
 
 PROMPT_VIDEO_RESPIRACION_EN = """
 You are an expert veterinarian analyzing a video of a pet's breathing.
-Analyze the video and respond ONLY with valid JSON with this exact structure:
+Analyze the video and respond ONLY with valid JSON with this exact structure.
+CRITICAL: every string value must be in English only. Do not use Spanish anywhere in the JSON.
 {
   "frecuencia_respiratoria": "normal|elevated|low|very_elevated",
   "respiraciones_por_minuto": estimated number,
@@ -775,10 +776,10 @@ class MotorGroq:
             return self._llamar_gemini(img_b64, prompt)
         except json.JSONDecodeError as e:
             print(f"⚠️ JSON parse error: {e}")
-            return self._resultado_fallback()
+            return self._resultado_fallback(lang=lang)
         except Exception as e:
             print(f"❌ Groq error: {e}")
-            return self._resultado_fallback()
+            return self._resultado_fallback(lang=lang)
 
     # ── Analizar vómito ───────────────────────────────────────
     def analizar_vomito_con_groq(self, img_bgr: np.ndarray, lang: str = "es") -> Dict[str, Any]:
@@ -793,7 +794,27 @@ class MotorGroq:
             print(f"❌ Groq vomito error: {e}")
             return {"vomito_detectado": False}
 
-    def _resultado_fallback(self) -> Dict[str, Any]:
+    def _resultado_fallback(self, lang: str = "es") -> Dict[str, Any]:
+        if lang == "en":
+            return {
+                "mascota_detectada": True,
+                "raza": {"nombre": "Undetermined", "confianza": 0, "descripcion": ""},
+                "peso": {"estimado_kg": 4.0, "estimado_lb": 8.8, "rango_min_kg": 3.0, "rango_max_kg": 5.0, "confianza": "Low"},
+                "color": {"color_principal": "Undetermined", "colores_secundarios": [], "patron": "-", "hex_aproximado": "#888888"},
+                "estado_corporal": {
+                    "bcs": 5, "estado": "Undetermined", "emoji": "🐱",
+                    "color_hex": "#52C97A", "salud_pct": 75,
+                    "consejo": "The scan could not be completed. Try again with better lighting.",
+                    "alerta_peso": False, "mensaje_alerta": None
+                },
+                "orejas": {
+                    "posicion": "Undetermined", "estado": "Undetermined",
+                    "significado": "Could not analyze", "alerta": False,
+                    "alerta_veterinario": False, "mensaje_veterinario": None
+                },
+                "gesto": {"nombre": "Undetermined", "emocion": "Unknown", "descripcion": "Could not analyze", "nivel_estres": 0, "cola_posicion": None},
+                "salud_visual": {"ojos": "Undetermined", "pelaje": "Undetermined", "observaciones": "Analysis unavailable"}
+            }
         return {
             "mascota_detectada": True,
             "raza": {"nombre": "No determinada", "confianza": 0, "descripcion": ""},
@@ -1119,6 +1140,8 @@ Analiza TODOS los escaneos, detecta patrones y tendencias entre los diferentes t
         if img is None:
             raise ValueError("No se pudo decodificar la imagen")
         resultado = self.analizar_respiracion_con_groq(img, lang=lang)
+        if lang == "en":
+            resultado = self._normalizar_respiracion_ingles(resultado)
         if not resultado.get("mascota_detectada", False):
             return {"mascota_detectada": False, "timestamp": time.time(),
                     "mensaje": "No se detectó la mascota. Apunta al pecho del animal."}
@@ -1146,6 +1169,34 @@ Analiza TODOS los escaneos, detecta patrones y tendencias entre los diferentes t
             "recomendacion":           resultado.get("recomendacion", "-"),
             "mensaje_urgencia":        resultado.get("mensaje_urgencia", None),
         }
+
+    def _normalizar_respiracion_ingles(self, resultado: Dict[str, Any]) -> Dict[str, Any]:
+        """Corrige valores comunes si el modelo mezcla español en respuestas de respiración."""
+        if not isinstance(resultado, dict):
+            return resultado
+
+        mapa = {
+            "Elevada": "Elevated",
+            "Alta": "High",
+            "Emergencia": "Emergency",
+            "Regular": "Regular",
+            "Irregular": "Irregular",
+            "Superficial": "Shallow",
+            "Profunda": "Deep",
+            "No determinado": "Undetermined",
+            "No determinada": "Undetermined",
+            "Indeterminada": "Undetermined",
+            "observar": "observe",
+            "veterinario_pronto": "vet_soon",
+            "emergencia": "emergency",
+        }
+
+        for clave in ("nivel", "patron", "urgencia", "frecuencia_respiratoria"):
+            valor = resultado.get(clave)
+            if isinstance(valor, str) and valor in mapa:
+                resultado[clave] = mapa[valor]
+
+        return resultado
 
     # ── ANÁLISIS COMPLETO ESPASMOS ───────────────────────────
     def analizar_frame_espasmos(self, img_bytes: bytes, lang: str = "es") -> Dict[str, Any]:
@@ -1493,6 +1544,8 @@ async def analizar_video_respiracion(file: UploadFile = File(...), lang: str = F
             text = text.split("```")[1]
             if text.startswith("json"): text = text[4:]
         resultado = json.loads(text.strip())
+        if lang == "en":
+            resultado = motor._normalizar_respiracion_ingles(resultado) if motor else resultado
         return JSONResponse(content=resultado)
 
     except json.JSONDecodeError as e:

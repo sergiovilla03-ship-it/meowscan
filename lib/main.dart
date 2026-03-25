@@ -19,6 +19,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -28,6 +29,7 @@ import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -44,10 +46,19 @@ import 'package:timezone/data/latest.dart' as tz_data;
 const Color kBg        = Color(0xFFFFF9F0);   // Crema cálido
 const Color kSurface   = Color(0xFFFFFFFF);   // Blanco puro
 const Color kCard      = Color(0xFFFFFFFF);   // Blanco
-// ── API Security Key ──────────────────────────────────────────
+// ── API Security Keys ─────────────────────────────────────────
+// Para compilar con claves reales:
+//   flutter build apk --release
+//     --dart-define=MEOWSCAN_API_KEY=tu_clave
+//     --dart-define=RESEND_API_KEY=re_tuclavereal
+// En desarrollo usa los defaultValue (nunca subas claves reales al repo)
 const String kApiKey = String.fromEnvironment(
   'MEOWSCAN_API_KEY',
   defaultValue: 'ms-x9k2p7q4r8t3w6y1',
+);
+const String kResendKey = String.fromEnvironment(
+  'RESEND_API_KEY',
+  defaultValue: '', // vacío en dev: el email simplemente no se envía
 );
 
 
@@ -251,6 +262,16 @@ class L {
       'scan_navbar':       'Escanear',
       'analyzing_video':   'Analizando...',
       'video_few_secs':    'Esto puede tomar unos segundos',
+      // Traductor
+      'translator_title':  '🗣️ Traductor de Mascotas',
+      'translator_sub':    'Tu mascota te está diciendo algo...',
+      'translator_btn':    '🎙️ Traducir ahora',
+      'translator_record': '¡Grabando! Deja que hable...',
+      'translator_analyze':'Traduciendo con IA 🧠',
+      'translator_share':  '📲 Compartir en redes',
+      'translator_result': 'Tu mascota dice:',
+      'translator_prob':   'de probabilidad',
+      'translator_again':  '🔄 Traducir de nuevo',
     },
     'en': {
       'app_name':      'MeowScan',
@@ -425,6 +446,16 @@ class L {
       'scan_navbar':       'Scan',
       'analyzing_video':   'Analyzing...',
       'video_few_secs':    'This may take a few seconds',
+      // Translator
+      'translator_title':  '🗣️ Pet Translator',
+      'translator_sub':    'Your pet is trying to tell you something...',
+      'translator_btn':    '🎙️ Translate now',
+      'translator_record': 'Recording! Let them speak...',
+      'translator_analyze':'Translating with AI 🧠',
+      'translator_share':  '📲 Share on social media',
+      'translator_result': 'Your pet says:',
+      'translator_prob':   'probability',
+      'translator_again':  '🔄 Translate again',
     },
   };
 
@@ -527,22 +558,65 @@ class ScanRecord {
       date: DateTime.parse(j['date']), resultado: j['resultado']);
 }
 
+// ════════════════════════════════════════════════════════════════
+//  MODELO: VACUNAS
+// ════════════════════════════════════════════════════════════════
+class VaccineRecord {
+  String id, catId, name, veterinarian, notes, lotNumber;
+  DateTime applicationDate;
+  DateTime? nextDoseDate;
+  bool notifyBefore;
+  VaccineRecord({
+    required this.id, required this.catId, required this.name,
+    required this.applicationDate, this.veterinarian = '',
+    this.notes = '', this.lotNumber = '',
+    this.nextDoseDate, this.notifyBefore = true,
+  });
+  Map<String, dynamic> toJson() => {
+    'id': id, 'catId': catId, 'name': name,
+    'applicationDate': applicationDate.toIso8601String(),
+    'nextDoseDate': nextDoseDate?.toIso8601String(),
+    'veterinarian': veterinarian, 'notes': notes,
+    'lotNumber': lotNumber, 'notifyBefore': notifyBefore,
+  };
+  factory VaccineRecord.fromJson(Map<String, dynamic> j) => VaccineRecord(
+    id: j['id'], catId: j['catId'], name: j['name'],
+    applicationDate: DateTime.parse(j['applicationDate']),
+    nextDoseDate: j['nextDoseDate'] != null ? DateTime.parse(j['nextDoseDate']) : null,
+    veterinarian: j['veterinarian'] ?? '', notes: j['notes'] ?? '',
+    lotNumber: j['lotNumber'] ?? '', notifyBefore: j['notifyBefore'] ?? true,
+  );
+  VaccineStatus get status {
+    if (nextDoseDate == null) return VaccineStatus.noDate;
+    final diff = nextDoseDate!.difference(DateTime.now()).inDays;
+    if (diff < 0)   return VaccineStatus.expired;
+    if (diff <= 30) return VaccineStatus.soon;
+    return VaccineStatus.ok;
+  }
+  static List<String> commonVaccines(String tipo) => tipo == 'perro'
+    ? ['Parvovirus','Moquillo','Hepatitis','Parainfluenza','Rabia','Bordetella','Leptospirosis','Coronavirus']
+    : ['Triple Felina (HCP)','Rabia','Leucemia Felina (FeLV)','Panleucopenia','Herpesvirus','Calicivirus','Bordetella Felina'];
+}
+enum VaccineStatus { ok, soon, expired, noDate }
+
 class UserAccount {
   String email, username, passwordHash;
-  List<CatProfile>    cats;
-  List<ScanRecord>    scans;
+  List<CatProfile>     cats;
+  List<ScanRecord>     scans;
   List<VetAppointment> appointments;
-  List<Medication>    medications;
+  List<Medication>     medications;
+  List<VaccineRecord>  vaccines;
   UserAccount({required this.email, required this.username,
       required this.passwordHash,
       List<CatProfile>? cats, List<ScanRecord>? scans,
-      List<VetAppointment>? appointments, List<Medication>? medications})
+      List<VetAppointment>? appointments, List<Medication>? medications,
+      List<VaccineRecord>? vaccines})
       : cats         = cats         ?? [],
         scans        = scans        ?? [],
         appointments = appointments ?? [],
-        medications  = medications  ?? [];
+        medications  = medications  ?? [],
+        vaccines     = vaccines     ?? [];
 }
-
 // ════════════════════════════════════════════════════════════════
 //  STORAGE
 // ════════════════════════════════════════════════════════════════
@@ -586,6 +660,7 @@ class StorageService {
       scans:        await loadScans(),
       appointments: await loadAppointments(),
       medications:  await loadMedications(),
+      vaccines:     await loadVaccines(),
     );
   }
 
@@ -644,6 +719,18 @@ class StorageService {
     catch (_) { return []; }
   }
 
+  static Future<void> saveVaccines(List<VaccineRecord> items) async {
+    final p = await _p;
+    await p.setString('vaccines', jsonEncode(items.map((e) => e.toJson()).toList()));
+  }
+  static Future<List<VaccineRecord>> loadVaccines() async {
+    final p = await _p;
+    final data = p.getString('vaccines');
+    if (data == null) return [];
+    try { return (jsonDecode(data) as List).map((e) => VaccineRecord.fromJson(e)).toList(); }
+    catch (_) { return []; }
+  }
+
   static Future<String> getServerIp() async {
     final p = await _p;
     return p.getString('server_ip') ?? SERVER_URL;
@@ -696,7 +783,7 @@ BoxDecoration kCardDeco({Color? color, Color? border, double radius = 20}) =>
 
 Widget kGradBtn(String label, VoidCallback onTap,
     {List<Color> colors = const [kCoral, Color(0xFFFF8E53)]}) =>
-  GestureDetector(
+  AnimatedPressButton(
     onTap: onTap,
     child: Container(
       width: double.infinity,
@@ -727,6 +814,83 @@ Widget kOutlineBtn(String label, VoidCallback onTap, {Color color = kCoral}) =>
         style: _nunito(15, color, weight: FontWeight.w700))),
     ),
   );
+
+// ════════════════════════════════════════════════════════════════
+//  ANIMATED PRESS BUTTON — efecto tap con escala + brillo
+// ════════════════════════════════════════════════════════════════
+
+class AnimatedPressButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  final double scaleFactor;
+  const AnimatedPressButton({
+    Key? key,
+    required this.child,
+    required this.onTap,
+    this.scaleFactor = 0.94,
+  }) : super(key: key);
+  @override
+  State<AnimatedPressButton> createState() => _AnimatedPressButtonState();
+}
+
+class _AnimatedPressButtonState extends State<AnimatedPressButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+  late Animation<double> _brightness;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+      reverseDuration: const Duration(milliseconds: 200),
+    );
+    _scale = Tween<double>(begin: 1.0, end: widget.scaleFactor).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    _brightness = Tween<double>(begin: 0.0, end: -0.12).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _onTapDown(TapDownDetails _) => _ctrl.forward();
+  void _onTapUp(TapUpDetails _) {
+    _ctrl.reverse();
+    widget.onTap();
+  }
+  void _onTapCancel() => _ctrl.reverse();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: _onTapDown,
+      onTapUp: _onTapUp,
+      onTapCancel: _onTapCancel,
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, child) => Transform.scale(
+          scale: _scale.value,
+          child: ColorFiltered(
+            colorFilter: ColorFilter.matrix([
+              1,0,0,0, _brightness.value * 255,
+              0,1,0,0, _brightness.value * 255,
+              0,0,1,0, _brightness.value * 255,
+              0,0,0,1, 0,
+            ]),
+            child: child,
+          ),
+        ),
+        child: widget.child,
+      ),
+    );
+  }
+}
 
 Widget kTextField(TextEditingController ctrl, String hint,
     {bool obscure = false, IconData? icon, Color accent = kCoral}) =>
@@ -884,6 +1048,23 @@ class FirestoreService {
     final snap = await _db.collection("usuarios").doc(uid).collection("medicamentos").get();
     return snap.docs.map((d) => Medication.fromJson(d.data())).toList();
   }
+  // ── Vaccines ──────────────────────────────────────────────
+  static Future<void> saveVaccines(List<VaccineRecord> vaccines) async {
+    if (uid == null) return;
+    final col   = _db.collection("usuarios").doc(uid).collection("vacunas");
+    final batch = _db.batch();
+    for (final v in vaccines) { batch.set(col.doc(v.id), v.toJson()); }
+    await batch.commit();
+  }
+  static Future<void> deleteVaccine(String id) async {
+    if (uid == null) return;
+    await _db.collection("usuarios").doc(uid).collection("vacunas").doc(id).delete();
+  }
+  static Future<List<VaccineRecord>> loadVaccines() async {
+    if (uid == null) return [];
+    final snap = await _db.collection("usuarios").doc(uid).collection("vacunas").get();
+    return snap.docs.map((d) => VaccineRecord.fromJson(d.data())).toList();
+  }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -891,9 +1072,15 @@ class FirestoreService {
 // ════════════════════════════════════════════════════════════════
 
 class EmailService {
-  static const _resendKey = "re_CGpxZGth_3dUwQc3cstg3rPzD3Hy71gXA";
+  // La clave se inyecta en tiempo de compilación con --dart-define=RESEND_API_KEY=...
+  // Si está vacía (dev/debug), el email se omite silenciosamente.
+  static String get _resendKey => kResendKey;
 
   static Future<void> enviarBienvenida(String email, String username) async {
+    if (_resendKey.isEmpty) {
+      print('ℹ️ RESEND_API_KEY no configurada — email de bienvenida omitido');
+      return;
+    }
     try {
       await http.post(
         Uri.parse("https://api.resend.com/emails"),
@@ -1006,9 +1193,50 @@ class NotificationService {
     try {
       const android = AndroidInitializationSettings('@mipmap/ic_launcher');
       await _plugin.initialize(const InitializationSettings(android: android));
-      await _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+
+      final androidPlugin = _plugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+      // Pedir permiso de notificaciones (Android 13+)
+      await androidPlugin?.requestNotificationsPermission();
+
+      // Crear canales explícitamente con importancia MAX
+      // Esto es crítico en FuntouchOS (Vivo), MIUI (Xiaomi), EMUI (Huawei)
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'meowscan_meds',
+          'Medication Reminders',
+          description: 'Daily medication reminders for your pet',
+          importance: Importance.max,
+          playSound: true,
+          enableVibration: true,
+          enableLights: true,
+          ledColor: kCoral,
+          showBadge: true,
+        ));
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'meowscan_appts',
+          'Vet Appointments',
+          description: 'Reminders for upcoming vet appointments',
+          importance: Importance.max,
+          playSound: true,
+          enableVibration: true,
+          enableLights: true,
+          ledColor: kTurquoise,
+          showBadge: true,
+        ));
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'meowscan_now',
+          'MeowScan Alerts',
+          description: 'Instant alerts from MeowScan',
+          importance: Importance.max,
+          playSound: true,
+          enableVibration: true,
+          showBadge: true,
+        ));
+
       _initialized = true;
     } catch (e) {
       print('⚠️ Notification init error: $e');
@@ -1019,11 +1247,22 @@ class NotificationService {
     NotificationDetails(
       android: AndroidNotificationDetails(
         channelId, channelName,
+        channelDescription: 'MeowScan reminders — medication & vet appointments',
         importance: Importance.max,
         priority: Priority.max,
         playSound: true,
         enableVibration: true,
+        vibrationPattern: Int64List.fromList([0, 500, 200, 500]),
+        enableLights: true,
+        ledColor: kCoral,
+        ledOnMs: 1000,
+        ledOffMs: 500,
+        fullScreenIntent: true,
+        // Evita que MIUI/FuntouchOS clasifique la notif como silenciosa
+        category: AndroidNotificationCategory.alarm,
+        visibility: NotificationVisibility.public,
         icon: '@mipmap/ic_launcher',
+        largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
       ),
     );
 
@@ -1125,12 +1364,60 @@ class NotificationService {
     for (final med in user.medications) {
       if (med.active) await scheduleMedication(med);
     }
+    for (final vac in user.vaccines) {
+      if (vac.notifyBefore && vac.nextDoseDate != null) {
+        await scheduleVaccine(vac);
+      }
+    }
+  }
+
+  // ── Programar vacuna ──
+  static Future<void> scheduleVaccine(VaccineRecord vac) async {
+    await init();
+    await cancelVaccine(vac.id);
+    if (vac.nextDoseDate == null || !vac.notifyBefore) return;
+    try {
+      final now = DateTime.now();
+      final sevenDays = vac.nextDoseDate!.subtract(const Duration(days: 7));
+      if (sevenDays.isAfter(now)) {
+        await _plugin.zonedSchedule(
+          _vacId(vac.id, 0),
+          L.lang == 'en' ? '💉 Vaccine due in 7 days' : '💉 Vacuna vence en 7 días',
+          '${vac.name}',
+          tz.TZDateTime.from(sevenDays, tz.local),
+          _details('meowscan_appts', 'Vet Appointments'),
+          androidScheduleMode: AndroidScheduleMode.alarmClock,
+          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        );
+      }
+      final oneDay = vac.nextDoseDate!.subtract(const Duration(days: 1));
+      if (oneDay.isAfter(now)) {
+        await _plugin.zonedSchedule(
+          _vacId(vac.id, 1),
+          L.lang == 'en' ? '💉 Vaccine due tomorrow!' : '💉 ¡Vacuna vence mañana!',
+          '${vac.name}',
+          tz.TZDateTime.from(oneDay, tz.local),
+          _details('meowscan_appts', 'Vet Appointments'),
+          androidScheduleMode: AndroidScheduleMode.alarmClock,
+          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        );
+      }
+    } catch (e) { print('⚠️ scheduleVaccine error: \$e'); }
+  }
+
+  static Future<void> cancelVaccine(String vacId) async {
+    try {
+      await _plugin.cancel(_vacId(vacId, 0));
+      await _plugin.cancel(_vacId(vacId, 1));
+    } catch (_) {}
   }
 
   static int _apptId(String id, int suffix) =>
     (id.hashCode.abs() % 100000) * 10 + suffix;
   static int _medId(String id) =>
     (id.hashCode.abs() % 100000) * 10 + 5;
+  static int _vacId(String id, int suffix) =>
+    (id.hashCode.abs() % 90000 + 10000) * 10 + suffix;
 }
 
 
@@ -1480,8 +1767,8 @@ class _VetBotTabState extends State<VetBotTab> {
     String ctx = '';
     if (cat != null) {
       ctx += L.lang == 'en'
-        ? 'The user has a pet named ${cat.name}, type: ${cat.tipo}, age: ${cat.edad}. '
-        : 'El usuario tiene una mascota llamada ${cat.name}, tipo: ${cat.tipo}, edad: ${cat.edad}. ';
+        ? "The user has a pet named ${cat.name}, type: ${cat.tipo}, age: ${cat.ageYears}y${cat.ageMonths}m. "
+        : "El usuario tiene una mascota llamada ${cat.name}, tipo: ${cat.tipo}, edad: ${cat.ageYears}a${cat.ageMonths}m. ";
     }
     if (recentScans.isNotEmpty) {
       ctx += L.lang == 'en' ? 'Recent scans: ' : 'Escaneos recientes: ';
@@ -1495,40 +1782,34 @@ class _VetBotTabState extends State<VetBotTab> {
 
   String get _systemPrompt {
     final ctx = _buildContext();
+    final ctxLine = ctx.isNotEmpty ? '\n\nContext: $ctx' : '';
     if (L.lang == 'en') {
-      return """You are Dr. MeowScan, a warm and experienced veterinarian with 20+ years of experience specializing in cats and dogs. You work inside the MeowScan app.
-
-$ctx
-
-Your personality:
-- Warm, empathetic, and reassuring but honest
-- Ask clarifying questions when needed (age, symptoms duration, etc.)
-- Always recommend seeing a real vet for serious symptoms
-- Give practical, actionable advice
-- Use emojis naturally to keep a friendly tone
-- Keep responses concise but complete (max 3-4 sentences per message)
-- NEVER diagnose definitively — always say "could be" or "might indicate"
-- For emergencies, always say to go to the vet IMMEDIATELY
-
-Always respond in English."""
+      return 'You are Dr. MeowScan, a warm veterinarian with 20+ years of experience specializing in cats and dogs. You work inside the MeowScan app.$ctxLine\n\n'
+        'Your personality:\n'
+        '- Warm, empathetic and reassuring but honest\n'
+        '- Ask clarifying questions when needed (age, symptom duration, etc.)\n'
+        '- Always recommend seeing a real vet for serious symptoms\n'
+        '- Give practical, actionable advice\n'
+        '- Use emojis naturally for a friendly tone\n'
+        '- Keep responses concise (max 3-4 sentences per message)\n'
+        '- NEVER diagnose definitively - always say could be or might indicate\n'
+        '- For emergencies, always say to go to the vet IMMEDIATELY\n\n'
+        'Always respond in English.';
     } else {
-      return """Eres el Dr. MeowScan, un veterinario cálido y experimentado con más de 20 años de experiencia especializado en gatos y perros. Trabajas dentro de la app MeowScan.
-
-$ctx
-
-Tu personalidad:
-- Cálido, empático y tranquilizador pero honesto
-- Haz preguntas de aclaración cuando sea necesario (edad, duración de síntomas, etc.)
-- Siempre recomienda ver a un veterinario real para síntomas graves
-- Da consejos prácticos y accionables
-- Usa emojis de forma natural para mantener un tono amigable
-- Respuestas concisas pero completas (máx 3-4 oraciones por mensaje)
-- NUNCA diagnostiques definitivamente — siempre di "podría ser" o "podría indicar"
-- Para emergencias, siempre di que vayan al veterinario INMEDIATAMENTE
-
-Siempre responde en español.""";
+      return 'Eres el Dr. MeowScan, un veterinario cálido con más de 20 años de experiencia especializado en gatos y perros. Trabajas dentro de la app MeowScan.$ctxLine\n\n'
+        'Tu personalidad:\n'
+        '- Cálido, empático y tranquilizador pero honesto\n'
+        '- Haz preguntas de aclaración cuando sea necesario (edad, duración de síntomas, etc.)\n'
+        '- Siempre recomienda ver a un veterinario real para síntomas graves\n'
+        '- Da consejos prácticos y accionables\n'
+        '- Usa emojis de forma natural para mantener un tono amigable\n'
+        '- Respuestas concisas (máx 3-4 oraciones por mensaje)\n'
+        '- NUNCA diagnostiques definitivamente - siempre di podria ser o podria indicar\n'
+        '- Para emergencias, siempre di que vayan al veterinario INMEDIATAMENTE\n\n'
+        'Siempre responde en español.';
     }
   }
+
 
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty || _loading) return;
@@ -1667,14 +1948,13 @@ Siempre responde en español.""";
         child: Column(children: [
           const Text('🩺', style: TextStyle(fontSize: 48)),
           const SizedBox(height: 12),
-          kTitle(
-            L.lang == 'en' ? 'Hello! I'm Dr. MeowScan' : '¡Hola! Soy el Dr. MeowScan',
+          kTitle(L.lang == "en" ? "Hello! I'm Dr. MeowScan" : "Hola! Soy el Dr. MeowScan",
             size: 18),
           const SizedBox(height: 8),
           kBody(
             L.lang == 'en'
-              ? 'I'm a veterinarian with 20+ years of experience. Ask me anything about your pet's health, food, behavior or symptoms.'
-              : 'Soy veterinario con más de 20 años de experiencia. Pregúntame cualquier cosa sobre la salud, alimentación, comportamiento o síntomas de tu mascota.',
+              ? "I'm a veterinarian with 20+ years experience. Ask me anything about your pet's health, food or symptoms."
+              : "Soy veterinario con mas de 20 anos de experiencia. Preguntame sobre la salud, alimentacion o sintomas de tu mascota.",
             color: kMuted, size: 13),
         ])),
       const SizedBox(height: 16),
@@ -1694,8 +1974,8 @@ Siempre responde en español.""";
           const SizedBox(height: 8),
           kBody(
             L.lang == 'en'
-              ? 'I can see your pet's scan history. Ask me about the results!'
-              : '¡Puedo ver el historial de escaneos de tu mascota. Pregúntame sobre los resultados!',
+              ? "I can see your pet's scan history. Ask me about the results!"
+              : "Puedo ver el historial de escaneos. Preguntame sobre los resultados!",
             color: kMuted, size: 12),
         ])),
       const SizedBox(height: 16),
@@ -1876,7 +2156,7 @@ class _MeowScanAppState extends State<MeowScanApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title:                    'MeowScan',
+      title:                    'MeowScanAI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3:            true,
@@ -1938,6 +2218,7 @@ class _AuthScreenState extends State<AuthScreen>
       user.scans        = await FirestoreService.loadEscaneos();
       user.appointments = await FirestoreService.loadAppointments();
       user.medications  = await FirestoreService.loadMedications();
+      user.vaccines     = await FirestoreService.loadVaccines();
       await StorageService.saveUser(user);
       if (mounted) {
         MeowScanApp.of(context)?.setUser(user);
@@ -2232,6 +2513,7 @@ class _MainShellState extends State<MainShell> {
     if (u != null) {
       u.appointments = await FirestoreService.loadAppointments();
       u.medications  = await FirestoreService.loadMedications();
+      u.vaccines     = await FirestoreService.loadVaccines();
       u.cats         = await FirestoreService.loadMascotas();
       u.scans        = await FirestoreService.loadEscaneos();
       await StorageService.saveUser(u);
@@ -2257,12 +2539,13 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _navBar() {
+    // 5 tabs: Scan, History, VetBot, My Pets, Settings
     final items = [
-      ['🏠', L.get('scan_navbar')],
-      ['📋', L.get('history')],
-      ['🩺', L.lang == 'en' ? 'VetBot' : 'VetBot'],
-      ['🐱', L.get('my_cats')],
-      ['⚙️', L.get('settings')],
+      {'icon': '🏠', 'label': L.get('scan_navbar')  ?? (L.lang=='en'?'Scan':'Escanear')},
+      {'icon': '📋', 'label': L.get('history')       ?? (L.lang=='en'?'History':'Historial')},
+      {'icon': '🩺', 'label': 'VetBot'},
+      {'icon': '🐱', 'label': L.get('my_cats')       ?? (L.lang=='en'?'My Pets':'Mascotas')},
+      {'icon': '⚙️', 'label': L.get('settings')      ?? (L.lang=='en'?'Settings':'Config')},
     ];
     return Container(
       decoration: BoxDecoration(
@@ -2274,34 +2557,34 @@ class _MainShellState extends State<MainShell> {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(4, (i) => GestureDetector(
-              onTap: () => setState(() => _tab = i),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: _tab == i ? kCoral.withOpacity(0.12) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(items[i][0], style: TextStyle(
-                    fontSize: _tab == i ? 22 : 20)),
-                  const SizedBox(height: 2),
-                  Text(items[i][1],
-                    style: _nunito(10,
-                        _tab == i ? kCoral : kMuted,
-                        weight: _tab == i ? FontWeight.w800 : FontWeight.w600)),
-                ]),
-              ),
-            )),
-          ),
-        ),
-      ),
-    );
+            children: List.generate(items.length, (i) {
+              final active = _tab == i;
+              return GestureDetector(
+                onTap: () => setState(() => _tab = i),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: active ? kPurple.withOpacity(0.12) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(14)),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Text(items[i]['icon']!,
+                      style: TextStyle(
+                        fontSize: active ? 22 : 20,
+                      )),
+                    const SizedBox(height: 2),
+                    Text(items[i]['label']!,
+                      style: _nunito(
+                        9,
+                        active ? kPurple : kMuted,
+                        weight: active ? FontWeight.w800 : FontWeight.w600)),
+                  ])));
+            })))));
   }
+
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2312,10 +2595,9 @@ class HomeTab extends StatefulWidget {
   final List<CameraDescription> cameras;
   final UserAccount user;
   final VoidCallback onRefresh;
-  const HomeTab({Key? key, required this.cameras,
-      required this.user, required this.onRefresh}) : super(key: key);
-  @override
-  State<HomeTab> createState() => _HomeTabState();
+  const HomeTab({Key? key, required this.cameras, required this.user,
+    required this.onRefresh}) : super(key: key);
+  @override State<HomeTab> createState() => _HomeTabState();
 }
 
 class _HomeTabState extends State<HomeTab> {
@@ -2332,28 +2614,30 @@ class _HomeTabState extends State<HomeTab> {
     final ok = await Permission.camera.request();
     if (!ok.isGranted) return;
     final ip = await StorageService.getServerIp();
+    if (!mounted) return;
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ScanScreen(
         cameras: widget.cameras, serverIp: ip,
-        cat: _selected!, user: widget.user, onComplete: widget.onRefresh)));
+        cat: _selected!, user: widget.user,
+        onComplete: widget.onRefresh)));
   }
 
   void _addCat() {
     showModalBottomSheet(
-      context: context,
-      backgroundColor: kSurface,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      builder: (_) => AddCatSheet(onSave: (cat) async {
-        widget.user.cats.add(cat);
-        await StorageService.saveCats(widget.user.cats);
-        await FirestoreService.saveMascotas(widget.user.cats);
-        widget.onRefresh();
-        setState(() => _selected = cat);
-      }),
-    );
+      context: context, isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AddCatSheet(
+        onSave: (cat) {
+          widget.user.cats.add(cat);
+          StorageService.saveUser(widget.user);
+          FirestoreService.saveMascotas(widget.user.cats);
+          setState(() => _selected = cat);
+          widget.onRefresh();
+        }));
   }
+
+
+
 
   Widget _iconBtn(IconData icon, Color color, VoidCallback onTap) =>
     GestureDetector(
@@ -2379,13 +2663,13 @@ class _HomeTabState extends State<HomeTab> {
           const SizedBox(height: 12),
           Row(children: [
             Expanded(child: _miniCard(
-              emoji: "🫁", titulo: L.get('resp_title'),
+              icon: Icons.air_rounded, titulo: L.get('resp_title'),
               subtitulo: L.get('resp_sub'),
               colores: [Color(0xFF00B894), Color(0xFF00CEC9)],
               onTap: () => _openScan('respiracion'))),
             const SizedBox(width: 12),
             Expanded(child: _miniCard(
-              emoji: "🐾", titulo: L.get('spasm_title'),
+              icon: Icons.electric_bolt_rounded, titulo: L.get('spasm_title'),
               subtitulo: L.get('spasm_sub'),
               colores: [Color(0xFFE17055), Color(0xFFD63031)],
               onTap: () => _openScan('espasmos'))),
@@ -2393,13 +2677,13 @@ class _HomeTabState extends State<HomeTab> {
           const SizedBox(height: 12),
           Row(children: [
             Expanded(child: _miniCard(
-              emoji: "👅", titulo: L.get('gums_title'),
+              icon: Icons.sentiment_very_satisfied_rounded, titulo: L.get('gums_title'),
               subtitulo: L.get('gums_sub'),
               colores: [Color(0xFFFF6B9D), Color(0xFFFF4E8A)],
               onTap: () => _openScan('encias'))),
             const SizedBox(width: 12),
             Expanded(child: _miniCard(
-              emoji: "😿", titulo: L.get('meow_title'),
+              icon: Icons.record_voice_over_rounded, titulo: L.get('meow_title'),
               subtitulo: L.get('meow_sub'),
               colores: [Color(0xFF6C5CE7), Color(0xFFA855F7)],
               onTap: () => _openMaullido())),
@@ -2407,13 +2691,26 @@ class _HomeTabState extends State<HomeTab> {
           const SizedBox(height: 12),
           // ── Nutrition card ──
           _miniCardWide(
-            emoji: "🥗",
+            icon: Icons.set_meal_rounded,
             titulo: L.lang == 'en' ? 'Food Analyzer' : 'Analizador de Alimento',
             subtitulo: L.lang == 'en'
               ? 'Scan your pet food bag — rate quality & get better alternatives'
               : 'Escanea la bolsa de alimento — califica calidad y obtén alternativas',
             colores: [Color(0xFF11998E), Color(0xFF38EF7D)],
             onTap: () => _openNutricion()),
+          const SizedBox(height: 12),
+          // ── Find a Vet button ──
+          _findVetButton(),
+          const SizedBox(height: 12),
+          // ── Pet Translator card ──
+          _miniCardWide(
+            icon: Icons.record_voice_over_rounded,
+            titulo: L.lang == 'en' ? 'Pet Translator' : 'Traductor de Mascotas',
+            subtitulo: L.lang == 'en'
+              ? 'What is your pet saying? AI will translate!'
+              : '¿Qué dice tu mascota? ¡La IA lo traduce!',
+            colores: [Color(0xFF6C5CE7), Color(0xFFA29BFE)],
+            onTap: () => _openTranslator()),
           const SizedBox(height: 24),
           _catSelector(),
           const SizedBox(height: 24),
@@ -2439,8 +2736,9 @@ class _HomeTabState extends State<HomeTab> {
     ),
   ]);
 
-  Widget _scanCard() => GestureDetector(
+  Widget _scanCard() => AnimatedPressButton(
     onTap: _scan,
+    scaleFactor: 0.96,
     child: Container(
       width: double.infinity,
       padding: const EdgeInsets.all(28),
@@ -2454,7 +2752,15 @@ class _HomeTabState extends State<HomeTab> {
           blurRadius: 20, offset: const Offset(0, 8))],
       ),
       child: Column(children: [
-        const Text("🔍", style: TextStyle(fontSize: 56)),
+        Container(
+          width: 80, height: 80,
+          decoration: BoxDecoration(
+            color: Colors.white24,
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.document_scanner_rounded,
+              color: Colors.white, size: 42),
+        ),
         const SizedBox(height: 14),
         Text(L.get('start_scan'),
           style: _nunito(22, Colors.white, weight: FontWeight.w900)),
@@ -2465,7 +2771,7 @@ class _HomeTabState extends State<HomeTab> {
     ),
   );
 
-  Widget _vomitoCard() => GestureDetector(
+  Widget _vomitoCard() => AnimatedPressButton(
     onTap: () async {
       if (_selected == null) { _addCat(); return; }
       final ok = await Permission.camera.request();
@@ -2490,7 +2796,12 @@ class _HomeTabState extends State<HomeTab> {
           blurRadius: 16, offset: const Offset(0, 6))],
       ),
       child: Row(children: [
-        const Text("🤮", style: TextStyle(fontSize: 36)),
+        Container(
+          width: 52, height: 52,
+          decoration: BoxDecoration(
+            color: Colors.white24, shape: BoxShape.circle),
+          child: const Icon(Icons.biotech_rounded,
+              color: Colors.white, size: 28)),
         const SizedBox(width: 16),
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2501,17 +2812,17 @@ class _HomeTabState extends State<HomeTab> {
               style: _nunito(12, Colors.white70)),
           ],
         )),
-        const Icon(Icons.arrow_forward_ios_rounded,
-            color: Colors.white70, size: 18),
+        const Icon(Icons.chevron_right_rounded,
+            color: Colors.white70, size: 22),
       ]),
     ),
   );
 
   Widget _miniCardWide({
-    required String emoji, required String titulo,
+    required IconData icon, required String titulo,
     required String subtitulo, required List<Color> colores,
     required VoidCallback onTap}) =>
-    GestureDetector(
+    AnimatedPressButton(
       onTap: onTap,
       child: Container(
         width: double.infinity,
@@ -2521,20 +2832,24 @@ class _HomeTabState extends State<HomeTab> {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [BoxShadow(color: colores[0].withOpacity(0.3), blurRadius: 12, offset: const Offset(0,4))]),
         child: Row(children: [
-          Text(emoji, style: const TextStyle(fontSize: 36)),
+          Container(
+            width: 52, height: 52,
+            decoration: BoxDecoration(
+              color: Colors.white24, shape: BoxShape.circle),
+            child: Icon(icon, color: Colors.white, size: 28)),
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(titulo, style: _nunito(16, Colors.white, weight: FontWeight.w900)),
             const SizedBox(height: 4),
             Text(subtitulo, style: _nunito(12, Colors.white.withOpacity(0.85))),
           ])),
-          const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
+          const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 20),
         ])));
 
-  Widget _miniCard({required String emoji, required String titulo,
+  Widget _miniCard({required IconData icon, required String titulo,
       required String subtitulo, required List<Color> colores,
       required VoidCallback onTap}) =>
-    GestureDetector(
+    AnimatedPressButton(
       onTap: () async {
         if (_selected == null) { _addCat(); return; }
         onTap();
@@ -2550,7 +2865,11 @@ class _HomeTabState extends State<HomeTab> {
             blurRadius: 12, offset: const Offset(0, 4))],
         ),
         child: Row(children: [
-          Text(emoji, style: const TextStyle(fontSize: 28)),
+          Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(
+              color: Colors.white24, shape: BoxShape.circle),
+            child: Icon(icon, color: Colors.white, size: 24)),
           const SizedBox(width: 10),
           Expanded(child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2573,6 +2892,108 @@ class _HomeTabState extends State<HomeTab> {
         cat: _selected, user: widget.user,
         onComplete: widget.onRefresh)));
   }
+
+  void _openTranslator() async {
+    if (_selected == null) { _addCat(); return; }
+    final ok = await Permission.camera.request();
+    if (!ok.isGranted) return;
+    final ip = await StorageService.getServerIp();
+    if (!mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => PetTranslatorScreen(
+        cat: _selected!, user: widget.user,
+        serverIp: ip, cameras: widget.cameras)));
+  }
+
+  // ── Abrir Google Maps con veterinarias cercanas ──
+  Future<void> _openVetMap() async {
+    // Pedir permiso de ubicación
+    final status = await Permission.locationWhenInUse.request();
+
+    // URI geo: abre Google Maps directamente con búsqueda de veterinarias
+    // Si tiene permiso usa "near+me", si no igual funciona porque Maps
+    // detecta la ubicación por sí solo al abrirse
+    final query = L.lang == 'en'
+        ? 'veterinary+clinic+near+me'
+        : 'veterinaria+cerca+de+mi';
+
+    // Intentar abrir la app de Google Maps nativa primero
+    final geoUri = Uri.parse('geo:0,0?q=$query');
+    // Fallback: abrir en el navegador
+    final webUri = Uri.parse(
+        'https://www.google.com/maps/search/$query');
+
+    try {
+      if (await canLaunchUrl(geoUri)) {
+        await launchUrl(geoUri, mode: LaunchMode.externalApplication);
+      } else {
+        await launchUrl(webUri, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          backgroundColor: kCoral,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+          content: Text(
+            L.lang == 'en'
+              ? '❌ Could not open Google Maps'
+              : '❌ No se pudo abrir Google Maps',
+            style: _nunito(13, Colors.white, weight: FontWeight.w700)),
+        ));
+      }
+    }
+  }
+
+  Widget _findVetButton() => AnimatedPressButton(
+    onTap: _openVetMap,
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0984E3), Color(0xFF74B9FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(
+          color: const Color(0xFF0984E3).withOpacity(0.35),
+          blurRadius: 14, offset: const Offset(0, 5))]),
+      child: Row(children: [
+        // Ícono con fondo blanco semitransparente
+        Container(
+          width: 46, height: 46,
+          decoration: BoxDecoration(
+            color: Colors.white24,
+            borderRadius: BorderRadius.circular(14)),
+          child: const Center(
+            child: Text('🏥', style: TextStyle(fontSize: 24)))),
+        const SizedBox(width: 14),
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              L.lang == 'en' ? 'Find a Vet nearby' : 'Buscar veterinario cerca',
+              style: _nunito(15, Colors.white, weight: FontWeight.w900)),
+            const SizedBox(height: 2),
+            Text(
+              L.lang == 'en'
+                ? 'Open Google Maps with clinics near you'
+                : 'Abre Google Maps con clínicas cercanas',
+              style: _nunito(11, Colors.white70)),
+          ])),
+        // Flecha + pin de ubicación
+        Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          const Icon(Icons.location_on_rounded,
+              color: Colors.white, size: 20),
+          const SizedBox(height: 2),
+          const Icon(Icons.arrow_forward_ios_rounded,
+              color: Colors.white70, size: 13),
+        ]),
+      ]),
+    ),
+  );
 
   void _openScan(String tipo) async {
     final ok = await Permission.camera.request();
@@ -2792,7 +3213,10 @@ class _AddCatSheetState extends State<AddCatSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return Container(
+      decoration: const BoxDecoration(
+        color: kBg,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
       padding: EdgeInsets.only(
         left: 24, right: 24, top: 20,
         bottom: MediaQuery.of(context).viewInsets.bottom + 24),
@@ -2937,6 +3361,21 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   String  _sesion   = DateTime.now().millisecondsSinceEpoch.toString();
   late AnimationController _ringCtrl;
 
+  // ── Rate limit: evita spam de escaneos al backend ──
+  static DateTime? _lastScanFinished;
+  static const int _cooldownSeconds = 30;
+
+  bool get _isOnCooldown {
+    if (_lastScanFinished == null) return false;
+    return DateTime.now().difference(_lastScanFinished!).inSeconds < _cooldownSeconds;
+  }
+
+  int get _cooldownRemaining {
+    if (_lastScanFinished == null) return 0;
+    final elapsed = DateTime.now().difference(_lastScanFinished!).inSeconds;
+    return (_cooldownSeconds - elapsed).clamp(0, _cooldownSeconds);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -2953,6 +3392,20 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   }
 
   void _start() {
+    // Rate limit: impide iniciar si no han pasado los segundos de cooldown
+    if (_isOnCooldown) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        backgroundColor: kCoral,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        content: Text(
+          L.lang == 'en'
+            ? '⏱ Please wait ${_cooldownRemaining}s before scanning again'
+            : '⏱ Espera ${_cooldownRemaining}s antes de escanear de nuevo',
+          style: _nunito(13, Colors.white, weight: FontWeight.w700)),
+      ));
+      return;
+    }
     setState(() { _scanning = true; _secs = SCAN_DURATION; _frames = 0; _last = null; });
     _scanTimer = Timer.periodic(Duration(milliseconds: FRAME_INTERVAL), (_) => _capture());
     _cdTimer   = Timer.periodic(const Duration(seconds: 1), (t) {
@@ -2977,11 +3430,38 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'f.jpg'));
       final s   = await req.send().timeout(const Duration(seconds: 10));
       final res = await http.Response.fromStream(s);
-      if (res.statusCode == 200 && mounted)
-        setState(() { _last = json.decode(res.body); _frames++; });
+      if (res.statusCode == 200 && mounted) {
+        final data = json.decode(res.body) as Map<String, dynamic>;
+        setState(() {
+          if (_shouldKeepGeneralResult(data, _last)) {
+            _last = data;
+          }
+          _frames++;
+        });
+      }
     } catch (_) {} finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  int _generalResultScore(Map<String, dynamic>? data) {
+    if (data == null || data.isEmpty) return -1;
+    var score = 0;
+    if (data['mascota_detectada'] == true) score += 2;
+    if ((data['raza']?['raza'] ?? '').toString().isNotEmpty && data['raza']?['raza'] != '-') score += 3;
+    if ((data['peso']?['peso_kg']) != null && data['peso']?['peso_kg'] != 0) score += 2;
+    if ((data['color']?['color_principal'] ?? '').toString().isNotEmpty && data['color']?['color_principal'] != '-') score += 2;
+    if ((data['estado_corporal']?['estado'] ?? '').toString().isNotEmpty && data['estado_corporal']?['estado'] != '-') score += 2;
+    if ((data['gesto']?['nombre'] ?? '').toString().isNotEmpty && data['gesto']?['nombre'] != '-') score += 1;
+    if ((data['orejas']?['posicion'] ?? '').toString().isNotEmpty && data['orejas']?['posicion'] != '-') score += 1;
+    if ((data['imagen_anotada'] ?? '').toString().isNotEmpty) score += 1;
+    return score;
+  }
+
+  bool _shouldKeepGeneralResult(Map<String, dynamic> candidate, Map<String, dynamic>? current) {
+    final candidateScore = _generalResultScore(candidate);
+    final currentScore   = _generalResultScore(current);
+    return candidateScore >= currentScore;
   }
 
   static String _normalizeTipo(String endpoint) {
@@ -2993,6 +3473,8 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
 
   void _finish() async {
     _scanTimer?.cancel(); _cdTimer?.cancel();
+    // Registrar timestamp para el rate limit
+    _lastScanFinished = DateTime.now();
     setState(() => _scanning = false);
     if (_last != null) {
       final record = ScanRecord(
@@ -3027,6 +3509,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
           SizedBox.expand(child: CameraPreview(_cam!)),
         SafeArea(child: Column(children: [
           _topBar(),
+          _scanBanner(),
           const Spacer(),
           _overlay(),
           const SizedBox(height: 24),
@@ -3036,6 +3519,47 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       ]),
     );
   }
+
+  Widget _scanBanner() => AnimatedSwitcher(
+    duration: const Duration(milliseconds: 400),
+    child: _scanning
+      ? Container(
+          key: const ValueKey('scanning'),
+          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: kCoral.withOpacity(0.85),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [BoxShadow(color: kCoral.withOpacity(0.4), blurRadius: 10, offset: const Offset(0,4))]),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            const SizedBox(width: 10, height: 10,
+              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+            const SizedBox(width: 10),
+            Text(L.lang == 'en'
+              ? '🔍 Scanning · Keep the camera still'
+              : '🔍 Escaneando · Mantén la cámara quieta',
+              style: _nunito(13, Colors.white, weight: FontWeight.w700)),
+          ]))
+      : Container(
+          key: const ValueKey('tip'),
+          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xCC000000), Color(0xAA1a1a2e)],
+              begin: Alignment.centerLeft, end: Alignment.centerRight),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white24)),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            const Text('💡', style: TextStyle(fontSize: 15)),
+            const SizedBox(width: 8),
+            Flexible(child: Text(
+              L.lang == 'en'
+                ? 'Center your pet in the circle and tap Scan'
+                : 'Centra a tu mascota en el círculo y toca Escanear',
+              style: _nunito(12, Colors.white70),
+              textAlign: TextAlign.center)),
+          ])));
 
   Widget _topBar() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -3148,6 +3672,8 @@ class ResultScreen extends StatelessWidget {
       : super(key: key);
 
   Map<String, dynamic> get r => record.resultado;
+  bool get _isEn => L.lang == 'en';
+  String _txt(String es, String en) => _isEn ? en : es;
 
   @override
   Widget build(BuildContext context) {
@@ -3163,7 +3689,7 @@ class ResultScreen extends StatelessWidget {
             const SizedBox(height: 16),
             _infoCard("🧬 ${L.get('breed')}", kPurple, [
               _row(L.get('breed'),    r['raza']?['raza']       ?? '-', kPurple),
-              _row("Confianza IA",    "${r['raza']?['confianza'] ?? 0}%", kPurple),
+              _row(_txt("Confianza IA", "AI confidence"), "${r['raza']?['confianza'] ?? 0}%", kPurple),
               if ((r['raza']?['descripcion'] ?? '').isNotEmpty)
                 _desc(r['raza']?['descripcion'] ?? ''),
             ]),
@@ -3281,9 +3807,9 @@ class ResultScreen extends StatelessWidget {
           const SizedBox(width: 10),
           kBody("$pesoLb lb", color: kMuted),
         ]),
-        if (rango.isNotEmpty) kBody("Rango: $rango", color: kMuted, size: 12),
+        if (rango.isNotEmpty) kBody("${_txt('Rango', 'Range')}: $rango", color: kMuted, size: 12),
         const SizedBox(height: 6),
-        _row("Confianza", r['peso']?['confianza'] ?? '-', kTurquoise),
+        _row(_txt("Confianza", "Confidence"), r['peso']?['confianza'] ?? '-', kTurquoise),
       ]),
     );
   }
@@ -3367,7 +3893,7 @@ class ResultScreen extends StatelessWidget {
                 weight: FontWeight.w700))),
       ]),
       const SizedBox(height: 8),
-      _row("Estado", estado, kBlue),
+      _row(_txt("Estado", "State"), estado, kBlue),
       const SizedBox(height: 4),
       kBody(significado, color: kMuted, size: 13),
     ]);
@@ -3397,7 +3923,7 @@ class ResultScreen extends StatelessWidget {
           minHeight: 8)),
       if (cola != null) ...[
         const SizedBox(height: 8),
-        _row("Cola", cola.toString(), kPurple),
+        _row(_txt("Cola", "Tail"), cola.toString(), kPurple),
       ],
     ]);
   }
@@ -3409,8 +3935,8 @@ class ResultScreen extends StatelessWidget {
     final posicion   = cola['posicion']   ?? '-';
     final significado= cola['significado']?? '-';
     return Column(children: [
-      _infoCard("🐾 Cola", kGreen, [
-        _row("Posición", posicion, kGreen),
+      _infoCard("🐾 ${_txt('Cola', 'Tail')}", kGreen, [
+        _row(_txt("Posición", "Position"), posicion, kGreen),
         const SizedBox(height: 6),
         kBody(significado, color: kMuted, size: 13),
       ]),
@@ -3451,29 +3977,30 @@ class ResultScreen extends StatelessWidget {
       build: (pw.Context ctx) => pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Text(L.lang == 'en' ? 'MeowScan — Pet Report' : 'MeowScan — Reporte Felino',
+          pw.Text(_txt('MeowScan — Reporte de Mascota', 'MeowScan — Pet Report'),
             style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 8),
-          pw.Text((L.lang == 'en' ? 'Pet: ' : 'Mascota: ') + cat.name + ' · ' + cat.ageYears.toString() + (L.lang == 'en' ? 'y ' : ' años ') + cat.ageMonths.toString() + (L.lang == 'en' ? 'm' : ' meses')),
-          pw.Text((L.lang == 'en' ? 'Date: ' : 'Fecha: ') + DateFormat('dd/MM/yyyy HH:mm').format(record.date)),
+          pw.Text((_txt('Mascota: ', 'Pet: ')) + cat.name + ' · ' + cat.ageYears.toString() + (_txt(' años ', 'y ')) + cat.ageMonths.toString() + (_txt(' meses', 'm')),
+          ),
+          pw.Text((_txt('Fecha: ', 'Date: ')) + DateFormat('dd/MM/yyyy HH:mm').format(record.date)),
           pw.Divider(),
           pw.SizedBox(height: 12),
-          _pdfRow('Raza',           r['raza']?['raza']              ?? '-'),
-          _pdfRow('Confianza IA',   '${r['raza']?['confianza'] ?? 0}%'),
-          _pdfRow('Peso',           '${r['peso']?['peso_kg'] ?? '-'} kg / ${r['peso']?['peso_lb'] ?? '-'} lb'),
-          _pdfRow('Estado corporal',r['estado_corporal']?['estado']  ?? '-'),
+          _pdfRow(_txt('Raza', 'Breed'), r['raza']?['raza'] ?? '-'),
+          _pdfRow(_txt('Confianza IA', 'AI confidence'), '${r['raza']?['confianza'] ?? 0}%'),
+          _pdfRow(_txt('Peso', 'Weight'), '${r['peso']?['peso_kg'] ?? '-'} kg / ${r['peso']?['peso_lb'] ?? '-'} lb'),
+          _pdfRow(_txt('Estado corporal', 'Body condition'), r['estado_corporal']?['estado'] ?? '-'),
           _pdfRow('BCS',            '${r['estado_corporal']?['bcs'] ?? '-'} / 9'),
-          _pdfRow('Índice salud',   '${r['estado_corporal']?['salud_pct'] ?? '-'}%'),
-          _pdfRow('Color pelaje',   r['color']?['color_principal']   ?? '-'),
-          _pdfRow('Patrón',         r['color']?['patron']            ?? '-'),
-          _pdfRow('Orejas',         r['orejas']?['posicion']         ?? '-'),
-          _pdfRow('Estado ánimo',   r['gesto']?['nombre']            ?? '-'),
-          _pdfRow('Nivel estrés',   '${r['gesto']?['nivel_estres'] ?? 0}/10'),
+          _pdfRow(_txt('Índice salud', 'Health score'), '${r['estado_corporal']?['salud_pct'] ?? '-'}%'),
+          _pdfRow(_txt('Color pelaje', 'Coat color'), r['color']?['color_principal'] ?? '-'),
+          _pdfRow(_txt('Patrón', 'Pattern'), r['color']?['patron'] ?? '-'),
+          _pdfRow(_txt('Orejas', 'Ears'), r['orejas']?['posicion'] ?? '-'),
+          _pdfRow(_txt('Estado ánimo', 'Mood'), r['gesto']?['nombre'] ?? '-'),
+          _pdfRow(_txt('Nivel estrés', 'Stress level'), '${r['gesto']?['nivel_estres'] ?? 0}/10'),
           pw.SizedBox(height: 16),
-          pw.Text(L.lang == 'en' ? 'Tip:' : 'Consejo:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+          pw.Text(_txt('Consejo:', 'Tip:'), style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
           pw.Text(r['estado_corporal']?['consejo'] ?? ''),
           pw.SizedBox(height: 24),
-          pw.Text('Generado por MeowScan v$APP_VERSION',
+          pw.Text(_txt('Generado por MeowScan v$APP_VERSION', 'Generated by MeowScan v$APP_VERSION'),
             style: const pw.TextStyle(fontSize: 10)),
         ],
       ),
@@ -3551,6 +4078,17 @@ class HistoryTab extends StatefulWidget {
 class _HistoryTabState extends State<HistoryTab> {
 
   void _deleteScan(ScanRecord scan) async {
+    // If orphan scan (pet deleted), delete silently without confirmation
+    final isOrphan = !widget.user.cats.any((c) => c.id == scan.catId) 
+                     && scan.catId != 'general';
+    if (isOrphan) {
+      widget.user.scans.removeWhere((s) => s.id == scan.id);
+      await StorageService.saveScans(widget.user.scans);
+      await FirestoreService.saveEscaneos(widget.user.scans);
+      widget.onRefresh();
+      if (mounted) setState(() {});
+      return;
+    }
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -3586,25 +4124,40 @@ class _HistoryTabState extends State<HistoryTab> {
 
   @override
   Widget build(BuildContext context) {
-    final scans = [...widget.user.scans]
+    // Only show scans whose pet still exists (or general scans)
+    final validCatIds = widget.user.cats.map((c) => c.id).toSet();
+    final scans = widget.user.scans
+        .where((s) => s.catId == 'general' || validCatIds.contains(s.catId))
+        .toList()
         ..sort((a, b) => b.date.compareTo(a.date));
 
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            kTitle(L.get('scan_history'), size: 24),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: kCoral.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20)),
-              child: Text("${scans.length} ${L.lang == 'en' ? 'scans' : 'escaneos'}",
-                style: _nunito(12, kCoral, weight: FontWeight.w700))),
-          ]),
-          const SizedBox(height: 20),
+          // ── Header estilo Settings ──
+          Padding(
+            padding: const EdgeInsets.only(bottom: 24),
+            child: Row(children: [
+              Container(
+                width: 50, height: 50,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [kCoral, Color(0xFFFF8E53)]),
+                  borderRadius: BorderRadius.circular(16)),
+                child: const Center(child: Text('📋', style: TextStyle(fontSize: 24)))),
+              const SizedBox(width: 14),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                kTitle(L.get('scan_history'), size: 22),
+                kBody('MeowScanAI v$APP_VERSION', color: kMuted, size: 12),
+              ])),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: kCoral.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20)),
+                child: Text("${scans.length} ${L.lang == 'en' ? 'scans' : 'escaneos'}",
+                  style: _nunito(12, kCoral, weight: FontWeight.w700))),
+            ])),
           if (scans.isEmpty)
             Expanded(child: Center(child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -3622,7 +4175,9 @@ class _HistoryTabState extends State<HistoryTab> {
                 final cat = widget.user.cats.firstWhere(
                   (c) => c.id == s.catId,
                   orElse: () => CatProfile(
-                      id: '', name: '?', ageYears: 0, ageMonths: 0));
+                      id: 'general',
+                      name: L.lang == 'en' ? 'General' : 'General',
+                      ageYears: 0, ageMonths: 0));
                 return _scanTile(context, s, cat);
               },
             )),
@@ -3811,6 +4366,7 @@ class _ProfileTabState extends State<ProfileTab> {
       widget.user.scans.removeWhere((s) => s.catId == cat.id);
       await StorageService.saveCats(widget.user.cats);
       await StorageService.saveScans(widget.user.scans);
+      widget.onRefresh();
       if (mounted) setState(() {});
       widget.onRefresh();
     }
@@ -3832,8 +4388,22 @@ class _ProfileTabState extends State<ProfileTab> {
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          kTitle(L.get('my_cats'), size: 24),
-          const SizedBox(height: 20),
+        // ── Header estilo Settings ──
+          Padding(
+            padding: const EdgeInsets.only(bottom: 20),
+            child: Row(children: [
+              Container(
+                width: 50, height: 50,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [kCoral, kPurple]),
+                  borderRadius: BorderRadius.circular(16)),
+                child: const Center(child: Text('🐾', style: TextStyle(fontSize: 24)))),
+              const SizedBox(width: 14),
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                kTitle(L.get('my_cats'), size: 22),
+                kBody('MeowScanAI v$APP_VERSION', color: kMuted, size: 12),
+              ]),
+            ])),
           _userCard(),
           const SizedBox(height: 20),
           kLabel(L.get('my_pets_label')),
@@ -3845,22 +4415,7 @@ class _ProfileTabState extends State<ProfileTab> {
               child: Center(child: kBody(L.get('no_cats'), color: kMuted)))
           else
             ...widget.user.cats.map((c) => _catCard(c)),
-          const SizedBox(height: 12),
-          kOutlineBtn("🐾 ${L.get('add_cat')}", () {
-            showModalBottomSheet(
-              context: context,
-              backgroundColor: kSurface,
-              isScrollControlled: true,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-              builder: (_) => AddCatSheet(onSave: (cat) async {
-                widget.user.cats.add(cat);
-                await StorageService.saveCats(widget.user.cats);
-                widget.onRefresh();
-                setState(() {});
-              }),
-            );
-          }),
+
         ]),
       ),
     );
@@ -3888,7 +4443,19 @@ class _ProfileTabState extends State<ProfileTab> {
           style: _nunito(20, Colors.white, weight: FontWeight.w900)),
         kBody(widget.user.email, color: Colors.white70, size: 13),
         const SizedBox(height: 4),
-        Text("${widget.user.scans.length} escaneos · ${widget.user.cats.length} gatitos",
+        Text(() {
+          final validIds = widget.user.cats.map((c) => c.id).toSet();
+          final realScans = widget.user.scans
+              .where((s) => validIds.contains(s.catId) || s.catId == 'general')
+              .length;
+          final petsLabel = L.lang == 'en'
+              ? '${widget.user.cats.length} pets'
+              : '${widget.user.cats.length} mascotas';
+          final scansLabel = L.lang == 'en'
+              ? '$realScans scans'
+              : '$realScans escaneos';
+          return '$scansLabel · $petsLabel';
+        }(),
           style: _nunito(12, Colors.white, weight: FontWeight.w700)),
       ]),
     ]),
@@ -3922,6 +4489,12 @@ class _ProfileTabState extends State<ProfileTab> {
                   cat: cat, user: widget.user, serverIp: ip)));
             }),
             const SizedBox(width: 6),
+            _iconBtn(Icons.vaccines_rounded, const Color(0xFF00CEC9), () =>
+              Navigator.push(context, MaterialPageRoute(
+                builder: (_) => VaccineScreen(
+                  cat: cat, user: widget.user,
+                  onRefresh: widget.onRefresh)))),
+            const SizedBox(width: 6),
             _iconBtn(Icons.calendar_month_rounded, const Color(0xFF00B894), () =>
               Navigator.push(context, MaterialPageRoute(
                 builder: (_) => VetAppointmentsScreen(cat: cat, user: widget.user,
@@ -3945,6 +4518,406 @@ class _ProfileTabState extends State<ProfileTab> {
 }
 
 // ════════════════════════════════════════════════════════════════
+//  VACCINE SCREEN — Carnet de Vacunas
+// ════════════════════════════════════════════════════════════════
+
+class VaccineScreen extends StatefulWidget {
+  final CatProfile cat;
+  final UserAccount user;
+  final VoidCallback onRefresh;
+  const VaccineScreen({Key? key, required this.cat,
+      required this.user, required this.onRefresh}) : super(key: key);
+  @override State<VaccineScreen> createState() => _VaccineScreenState();
+}
+
+class _VaccineScreenState extends State<VaccineScreen> {
+
+  List<VaccineRecord> get _catVaccines =>
+    widget.user.vaccines.where((v) => v.catId == widget.cat.id).toList()
+      ..sort((a, b) => b.applicationDate.compareTo(a.applicationDate));
+
+  Color _statusColor(VaccineStatus s) {
+    switch (s) {
+      case VaccineStatus.ok:      return const Color(0xFF00B894);
+      case VaccineStatus.soon:    return kYellow;
+      case VaccineStatus.expired: return kCoral;
+      case VaccineStatus.noDate:  return kMuted;
+    }
+  }
+
+  String _statusLabel(VaccineStatus s) {
+    switch (s) {
+      case VaccineStatus.ok:      return L.lang == 'en' ? 'Up to date' : 'Al día';
+      case VaccineStatus.soon:    return L.lang == 'en' ? 'Due soon' : 'Pronto a vencer';
+      case VaccineStatus.expired: return L.lang == 'en' ? 'Expired' : 'Vencida';
+      case VaccineStatus.noDate:  return L.lang == 'en' ? 'No date' : 'Sin fecha';
+    }
+  }
+
+  void _addVaccine() {
+    final nameCtrl  = TextEditingController();
+    final vetCtrl   = TextEditingController();
+    final lotCtrl   = TextEditingController();
+    final notesCtrl = TextEditingController();
+    DateTime appDate  = DateTime.now();
+    DateTime? nextDate;
+    bool notify = true;
+    final common = VaccineRecord.commonVaccines(widget.cat.tipo);
+    String? selectedCommon;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setS) => Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            left: 24, right: 24, top: 24),
+          decoration: BoxDecoration(
+            color: kSurface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
+          child: SingleChildScrollView(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: kMuted.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 20),
+              kTitle(L.lang == 'en' ? '💉 Add Vaccine' : '💉 Agregar Vacuna', size: 20),
+              const SizedBox(height: 16),
+              kLabel(L.lang == 'en' ? 'COMMON VACCINES' : 'VACUNAS COMUNES'),
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, runSpacing: 8,
+                children: common.map((v) => GestureDetector(
+                  onTap: () { setS(() { selectedCommon = v; nameCtrl.text = v; }); },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: selectedCommon == v ? kTurquoise.withOpacity(0.15) : kBg,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: selectedCommon == v ? kTurquoise : kBorder,
+                        width: selectedCommon == v ? 1.5 : 1)),
+                    child: Text(v, style: _nunito(12,
+                      selectedCommon == v ? kTurquoise : kMuted,
+                      weight: FontWeight.w700))),
+                )).toList()),
+              const SizedBox(height: 14),
+              kLabel(L.lang == 'en' ? 'VACCINE NAME' : 'NOMBRE DE LA VACUNA'),
+              const SizedBox(height: 8),
+              kTextField(nameCtrl,
+                L.lang == 'en' ? 'E.g.: Rabies, Triple Feline...' : 'Ej: Rabia, Triple Felina...',
+                icon: Icons.vaccines_rounded, accent: kTurquoise),
+              const SizedBox(height: 14),
+              kLabel(L.lang == 'en' ? 'VETERINARIAN (OPTIONAL)' : 'VETERINARIO (OPCIONAL)'),
+              const SizedBox(height: 8),
+              kTextField(vetCtrl,
+                L.lang == 'en' ? 'Vet name' : 'Nombre del veterinario',
+                icon: Icons.person_rounded, accent: kTurquoise),
+              const SizedBox(height: 14),
+              kLabel(L.lang == 'en' ? 'APPLICATION DATE' : 'FECHA DE APLICACIÓN'),
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () async {
+                  final d = await showDatePicker(
+                    context: ctx, initialDate: appDate,
+                    firstDate: DateTime(2010), lastDate: DateTime.now(),
+                    builder: (_, child) => Theme(
+                      data: ThemeData.light().copyWith(
+                        colorScheme: const ColorScheme.light(primary: kTurquoise)),
+                      child: child!));
+                  if (d != null) setS(() => appDate = d);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: kBg, borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: kBorder)),
+                  child: Row(children: [
+                    const Icon(Icons.calendar_today_rounded, color: kTurquoise, size: 18),
+                    const SizedBox(width: 10),
+                    Text(DateFormat('dd/MM/yyyy').format(appDate), style: _nunito(14, kText)),
+                  ]))),
+              const SizedBox(height: 14),
+              kLabel(L.lang == 'en' ? 'NEXT DOSE DATE (OPTIONAL)' : 'PRÓXIMA DOSIS (OPCIONAL)'),
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () async {
+                  final d = await showDatePicker(
+                    context: ctx,
+                    initialDate: nextDate ?? DateTime.now().add(const Duration(days: 365)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 3650)),
+                    builder: (_, child) => Theme(
+                      data: ThemeData.light().copyWith(
+                        colorScheme: const ColorScheme.light(primary: kCoral)),
+                      child: child!));
+                  if (d != null) setS(() => nextDate = d);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: kBg, borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: nextDate != null ? kCoral.withOpacity(0.4) : kBorder)),
+                  child: Row(children: [
+                    Icon(Icons.event_rounded,
+                      color: nextDate != null ? kCoral : kMuted, size: 18),
+                    const SizedBox(width: 10),
+                    Text(
+                      nextDate != null
+                        ? DateFormat('dd/MM/yyyy').format(nextDate!)
+                        : (L.lang == 'en' ? 'Tap to set date' : 'Toca para establecer'),
+                      style: _nunito(14, nextDate != null ? kText : kMuted)),
+                    if (nextDate != null) ...[
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => setS(() => nextDate = null),
+                        child: const Icon(Icons.close_rounded, color: kMuted, size: 16)),
+                    ],
+                  ]))),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: kBg, borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: kBorder)),
+                child: Row(children: [
+                  const Icon(Icons.notifications_rounded, color: kTurquoise, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(
+                    L.lang == 'en' ? 'Remind me before next dose' : 'Recordarme antes de la próxima dosis',
+                    style: _nunito(13, kText))),
+                  Switch(value: notify, onChanged: (v) => setS(() => notify = v),
+                    activeColor: kTurquoise),
+                ])),
+              const SizedBox(height: 24),
+              kGradBtn(
+                L.lang == 'en' ? '💉 Save Vaccine' : '💉 Guardar Vacuna',
+                () async {
+                  if (nameCtrl.text.trim().isEmpty) return;
+                  final vac = VaccineRecord(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    catId: widget.cat.id,
+                    name: nameCtrl.text.trim(),
+                    applicationDate: appDate,
+                    nextDoseDate: nextDate,
+                    veterinarian: vetCtrl.text.trim(),
+                    lotNumber: lotCtrl.text.trim(),
+                    notes: notesCtrl.text.trim(),
+                    notifyBefore: notify,
+                  );
+                  widget.user.vaccines.add(vac);
+                  await StorageService.saveVaccines(widget.user.vaccines);
+                  await FirestoreService.saveVaccines(widget.user.vaccines);
+                  if (notify && nextDate != null) {
+                    await NotificationService.scheduleVaccine(vac);
+                  }
+                  widget.onRefresh();
+                  if (mounted) { Navigator.pop(context); setState(() {}); }
+                },
+                colors: [kTurquoise, const Color(0xFF00CEC9)]),
+            ])))));
+  }
+
+  void _deleteVaccine(VaccineRecord vac) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(L.get('delete_confirm'),
+          style: _nunito(17, kText, weight: FontWeight.w800)),
+        content: Text(
+          L.lang == 'en' ? 'This vaccine record will be deleted.' : 'Se eliminará este registro de vacuna.',
+          style: _nunito(13, kMuted)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false),
+            child: Text(L.get('cancel_delete'), style: _nunito(13, kMuted))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: kCoral,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            child: Text(L.get('delete'),
+              style: _nunito(13, Colors.white, weight: FontWeight.w700))),
+        ]));
+    if (ok == true) {
+      await NotificationService.cancelVaccine(vac.id);
+      await FirestoreService.deleteVaccine(vac.id);
+      widget.user.vaccines.removeWhere((v) => v.id == vac.id);
+      await StorageService.saveVaccines(widget.user.vaccines);
+      widget.onRefresh();
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vaccines = _catVaccines;
+    final expired  = vaccines.where((v) => v.status == VaccineStatus.expired).length;
+    final soon     = vaccines.where((v) => v.status == VaccineStatus.soon).length;
+    final ok       = vaccines.where((v) => v.status == VaccineStatus.ok).length;
+
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(child: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+          child: Row(children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: kCardDeco(radius: 14),
+                child: const Icon(Icons.arrow_back_ios_new, color: kTurquoise, size: 18))),
+            const SizedBox(width: 14),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              kTitle(L.lang == 'en' ? '💉 Vaccine Record' : '💉 Carnet de Vacunas', size: 20),
+              kBody(widget.cat.name, color: kMuted, size: 13),
+            ])),
+            AnimatedPressButton(
+              onTap: _addVaccine,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [kTurquoise, Color(0xFF00CEC9)]),
+                  borderRadius: BorderRadius.circular(14)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                  const SizedBox(width: 6),
+                  Text(L.lang == 'en' ? 'Add' : 'Agregar',
+                    style: _nunito(13, Colors.white, weight: FontWeight.w800)),
+                ]))),
+          ])),
+        if (vaccines.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+            child: Row(children: [
+              _statChip('✅', '$ok ${L.lang == 'en' ? 'ok' : 'al día'}', const Color(0xFF00B894)),
+              const SizedBox(width: 8),
+              _statChip('⚠️', '$soon ${L.lang == 'en' ? 'soon' : 'pronto'}', kYellow),
+              const SizedBox(width: 8),
+              _statChip('🚨', '$expired ${L.lang == 'en' ? 'expired' : 'vencidas'}', kCoral),
+            ])),
+        const SizedBox(height: 16),
+        Expanded(
+          child: vaccines.isEmpty
+            ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Text('💉', style: TextStyle(fontSize: 52)),
+                const SizedBox(height: 16),
+                kBody(L.lang == 'en' ? 'No vaccines recorded yet' : 'Aún no hay vacunas registradas',
+                  color: kMuted, size: 15),
+                const SizedBox(height: 8),
+                kBody(L.lang == 'en' ? 'Tap + Add to register the first one' : 'Toca + Agregar para registrar la primera',
+                  color: kMuted.withOpacity(0.6), size: 13),
+              ]))
+            : ListView.separated(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
+                itemCount: vaccines.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (_, i) => _vaccineCard(vaccines[i]))),
+      ])));
+  }
+
+  Widget _statChip(String emoji, String label, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: color.withOpacity(0.3))),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Text(emoji, style: const TextStyle(fontSize: 13)),
+      const SizedBox(width: 5),
+      Text(label, style: _nunito(12, color, weight: FontWeight.w700)),
+    ]));
+
+  Widget _vaccineCard(VaccineRecord vac) {
+    final color    = _statusColor(vac.status);
+    final label    = _statusLabel(vac.status);
+    final daysLeft = vac.nextDoseDate != null
+      ? vac.nextDoseDate!.difference(DateTime.now()).inDays : null;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kSurface, borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withOpacity(0.25)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+          blurRadius: 8, offset: const Offset(0, 2))]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 42, height: 42,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+            child: const Center(child: Text('💉', style: TextStyle(fontSize: 20)))),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(vac.name, style: _nunito(15, kText, weight: FontWeight.w800)),
+            if (vac.veterinarian.isNotEmpty)
+              kBody('Dr. ${vac.veterinarian}', color: kMuted, size: 12),
+          ])),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: color.withOpacity(0.4))),
+            child: Text(label, style: _nunito(11, color, weight: FontWeight.w800))),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => _deleteVaccine(vac),
+            child: const Icon(Icons.delete_outline_rounded, color: kMuted, size: 19)),
+        ]),
+        const SizedBox(height: 10),
+        Container(height: 1, color: kBorder),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: _dateInfo(Icons.check_circle_rounded,
+            L.lang == 'en' ? 'Applied' : 'Aplicada',
+            DateFormat('dd/MM/yyyy').format(vac.applicationDate),
+            const Color(0xFF00B894))),
+          if (vac.nextDoseDate != null)
+            Expanded(child: _dateInfo(Icons.event_rounded,
+              L.lang == 'en' ? 'Next dose' : 'Próxima dosis',
+              DateFormat('dd/MM/yyyy').format(vac.nextDoseDate!), color)),
+        ]),
+        if (daysLeft != null) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.07), borderRadius: BorderRadius.circular(10)),
+            child: Text(
+              daysLeft < 0
+                ? (L.lang == 'en' ? '🚨 Expired ${daysLeft.abs()} days ago' : '🚨 Vencida hace ${daysLeft.abs()} días')
+                : daysLeft == 0
+                  ? (L.lang == 'en' ? '🚨 Expires today!' : '🚨 ¡Vence hoy!')
+                  : (L.lang == 'en' ? '📅 $daysLeft days remaining' : '📅 $daysLeft días restantes'),
+              style: _nunito(12, color, weight: FontWeight.w700))),
+        ],
+        if (vac.notes.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          kBody(vac.notes, color: kMuted, size: 11),
+        ],
+      ]));
+  }
+
+  Widget _dateInfo(IconData icon, String label, String value, Color color) =>
+    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Icon(icon, color: color, size: 14),
+      const SizedBox(width: 5),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        kBody(label, color: kMuted, size: 10),
+        Text(value, style: _nunito(12, kText, weight: FontWeight.w700)),
+      ]),
+    ]);
+}
+
+// ════════════════════════════════════════════════════════════════
 //  SETTINGS TAB
 // ════════════════════════════════════════════════════════════════
 
@@ -3957,8 +4930,8 @@ class SettingsTab extends StatefulWidget {
 
 class _SettingsTabState extends State<SettingsTab> {
   final _ipCtrl = TextEditingController();
+  bool _testing = false;
   String _status = '';
-  bool   _testing = false;
 
   @override
   void initState() {
@@ -3966,235 +4939,506 @@ class _SettingsTabState extends State<SettingsTab> {
     StorageService.getServerIp().then((ip) => _ipCtrl.text = ip);
   }
 
-  Future<void> _test() async {
-    setState(() { _testing = true; _status = '...'; });
+  @override
+  void dispose() { _ipCtrl.dispose(); super.dispose(); }
+
+  Future<void> _testServer() async {
+    setState(() { _testing = true; _status = ''; });
     try {
-      final ip    = _ipCtrl.text;
-      final proto = ip.contains('onrender') || ip.contains('trycloudflare')
-          ? 'https' : 'http';
-      final port  = ip.contains('onrender') || ip.contains('trycloudflare')
-          ? '' : ':8000';
+      final ip    = _ipCtrl.text.trim();
+      final proto = ip.contains('onrender') || ip.contains('trycloudflare') ? 'https' : 'http';
+      final port  = ip.contains('onrender') || ip.contains('trycloudflare') ? '' : ':8000';
       final r = await http.get(Uri.parse('$proto://$ip$port/health'))
           .timeout(const Duration(seconds: 8));
-      setState(() => _status = r.statusCode == 200
-          ? L.get('connected') : L.get('not_connected'));
       await StorageService.setServerIp(ip);
+      setState(() => _status = r.statusCode == 200 ? 'ok' : 'error');
     } catch (_) {
-      setState(() => _status = L.get('not_connected'));
+      setState(() => _status = 'error');
     } finally {
       setState(() => _testing = false);
     }
   }
 
   void _changePassword(BuildContext context) {
-    final newPassCtrl = TextEditingController();
-    final confirmCtrl = TextEditingController();
+    final n = TextEditingController();
+    final c = TextEditingController();
     showDialog(context: context, builder: (_) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Text(L.lang == 'es' ? '🔑 Cambiar contraseña' : '🔑 Change password'),
+      title: Text(L.lang == 'es' ? 'Cambiar contrasena' : 'Change password',
+        style: _nunito(16, kText, weight: FontWeight.w800)),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(
-          controller: newPassCtrl,
-          obscureText: true,
+        TextField(controller: n, obscureText: true,
           decoration: InputDecoration(
-            labelText: L.lang == 'es' ? 'Nueva contraseña' : 'New password',
+            labelText: L.lang == 'es' ? 'Nueva contrasena' : 'New password',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
         const SizedBox(height: 12),
-        TextField(
-          controller: confirmCtrl,
-          obscureText: true,
+        TextField(controller: c, obscureText: true,
           decoration: InputDecoration(
-            labelText: L.lang == 'es' ? 'Confirmar contraseña' : 'Confirm password',
+            labelText: L.lang == 'es' ? 'Confirmar' : 'Confirm',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
       ]),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
+        TextButton(onPressed: () => Navigator.pop(context),
           child: Text(L.lang == 'es' ? 'Cancelar' : 'Cancel')),
         TextButton(
           onPressed: () async {
-            if (newPassCtrl.text.length < 6) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(L.lang == 'es'
-                    ? 'Mínimo 6 caracteres' : 'Minimum 6 characters')));
-              return;
-            }
-            if (newPassCtrl.text != confirmCtrl.text) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(L.lang == 'es'
-                    ? 'Las contraseñas no coinciden' : 'Passwords do not match')));
-              return;
-            }
+            if (n.text.length < 6) { ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(L.lang == 'es' ? 'Minimo 6 caracteres' : 'Min 6 characters'))); return; }
+            if (n.text != c.text) { ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(L.lang == 'es' ? 'No coinciden' : 'Do not match'))); return; }
             try {
-              await FirebaseAuth.instance.currentUser
-                  ?.updatePassword(newPassCtrl.text);
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                backgroundColor: kGreen,
-                content: Text(L.lang == 'es'
-                    ? '✅ Contraseña actualizada' : '✅ Password updated')));
+              await FirebaseAuth.instance.currentUser?.updatePassword(n.text);
+              if (context.mounted) { Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  backgroundColor: kGreen,
+                  content: Text(L.lang == 'es' ? 'Contrasena actualizada' : 'Password updated'))); }
             } on FirebaseAuthException catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 backgroundColor: kCoral,
                 content: Text(e.code == 'requires-recent-login'
-                    ? (L.lang == 'es'
-                        ? 'Cierra sesión y vuelve a ingresar para cambiar la contraseña'
-                        : 'Sign out and sign in again to change your password')
-                    : (e.message ?? 'Error'))));
+                  ? (L.lang == 'es' ? 'Cierra sesion y vuelve a ingresar' : 'Sign out and sign in again')
+                  : (e.message ?? 'Error'))));
             }
           },
           child: Text(L.lang == 'es' ? 'Guardar' : 'Save',
-              style: const TextStyle(color: kPurple, fontWeight: FontWeight.w700))),
-      ],
-    ));
+            style: _nunito(14, kPurple, weight: FontWeight.w800))),
+      ]));
   }
 
-  void _confirmDeleteAccount(BuildContext context) {
+  void _deleteAccount(BuildContext context) {
     showDialog(context: context, builder: (_) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text("⚠️ Eliminar cuenta"),
-      content: const Text(
-          "Se eliminarán todos tus datos permanentemente. ¿Estás seguro?"),
+      title: Text(L.lang == 'es' ? 'Eliminar cuenta' : 'Delete account',
+        style: _nunito(16, kCoral, weight: FontWeight.w800)),
+      content: Text(
+        L.lang == 'es'
+          ? 'Se eliminaran todos tus datos. Esta accion no se puede deshacer.'
+          : 'All your data will be deleted. This action cannot be undone.',
+        style: _nunito(13, kText)),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
+        TextButton(onPressed: () => Navigator.pop(context),
+          child: Text(L.lang == 'es' ? 'Cancelar' : 'Cancel')),
         TextButton(
           onPressed: () async {
             Navigator.pop(context);
             await FirestoreService.deleteAccount();
             await StorageService.logout();
-            if (context.mounted) {
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(
-                    builder: (_) => AuthScreen(cameras: const [])),
-                (_) => false);
-            }
+            if (context.mounted) Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => AuthScreen(cameras: const [])), (_) => false);
           },
-          child: const Text("Eliminar", style: TextStyle(color: Colors.red))),
-      ],
-    ));
+          child: Text(L.lang == 'es' ? 'Eliminar' : 'Delete',
+            style: _nunito(14, kCoral, weight: FontWeight.w800))),
+      ]));
   }
 
   void _logout(BuildContext context) async {
     await StorageService.logout();
     await GoogleAuthService.signOut();
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => AuthScreen(cameras: widget.cameras)),
-      (_) => false);
+    if (context.mounted) Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => AuthScreen(cameras: widget.cameras)), (_) => false);
   }
-
-  Widget _iconBtn(IconData icon, Color color, VoidCallback onTap) =>
-    GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(7),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(10)),
-        child: Icon(icon, color: color, size: 17)));
 
   @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          kTitle(L.get('settings'), size: 24),
-          const SizedBox(height: 24),
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: kBg,
+    body: SafeArea(child: SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-          // Idioma
-          kLabel(L.get('language')),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: kCardDeco(),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                kBody("Español / English"),
-                Row(children: [
-                  _langChip('ES'),
-                  const SizedBox(width: 8),
-                  _langChip('EN'),
-                ]),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 28),
-
-          // Info
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [kPurple.withOpacity(0.1), kCoral.withOpacity(0.05)]),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: kPurple.withOpacity(0.2)),
-            ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text("🐱 MeowScan v$APP_VERSION",
-                style: _nunito(15, kPurple, weight: FontWeight.w800)),
-              const SizedBox(height: 4),
-              kBody("IA: Groq llama-4-scout · Video: Gemini 2.5", color: kMuted, size: 12),
-              kBody("© 2026 Candle Technology", color: kMuted, size: 11),
-            ]),
-          ),
-
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: () => _changePassword(context),
-            child: Center(child: Text(
-              L.lang == 'es' ? 'Cambiar contraseña' : 'Change password',
-              style: _nunito(13, kPurple, weight: FontWeight.w600)
-                  .copyWith(decoration: TextDecoration.underline)))),
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: () => _confirmDeleteAccount(context),
-            child: Center(child: Text(L.get('delete_account'),
-              style: _nunito(13, kMuted).copyWith(decoration: TextDecoration.underline)))),
-
-          const SizedBox(height: 20),
-
-          GestureDetector(
-            onTap: () => _logout(context),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
+        // ── Header ──
+        Padding(
+          padding: const EdgeInsets.only(bottom: 28),
+          child: Row(children: [
+            Container(
+              width: 50, height: 50,
               decoration: BoxDecoration(
-                color: kCoral.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: kCoral.withOpacity(0.3))),
-              child: Center(child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.logout_rounded, color: kCoral, size: 18),
-                  const SizedBox(width: 8),
-                  kBody(L.get('logout'), color: kCoral),
-                ])),
-            ),
-          ),
-        ]),
-      ),
-    );
+                gradient: const LinearGradient(colors: [kPurple, kTurquoise]),
+                borderRadius: BorderRadius.circular(16)),
+              child: const Center(child: Text('⚙️', style: TextStyle(fontSize: 24)))),
+            const SizedBox(width: 14),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              kTitle(L.lang == 'es' ? 'Configuracion' : 'Settings', size: 22),
+              kBody('MeowScanAI v$APP_VERSION', color: kMuted, size: 12),
+            ]),
+          ])),
+
+        // ════ IDIOMA ════
+        _secLabel(L.lang == 'es' ? '🌐  IDIOMA' : '🌐  LANGUAGE'),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          decoration: kCardDeco(),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            kBody('Español / English', color: kText),
+            Row(children: [
+              _langChip('ES'),
+              const SizedBox(width: 8),
+              _langChip('EN'),
+            ]),
+          ])),
+        const SizedBox(height: 24),
+
+        // ════ CUENTA ════
+        _secLabel(L.lang == 'es' ? '👤  CUENTA' : '👤  ACCOUNT'),
+        const SizedBox(height: 10),
+        Container(
+          decoration: kCardDeco(),
+          child: Column(children: [
+            _row(Icons.lock_outline_rounded, kPurple,
+              L.lang == 'es' ? 'Cambiar contrasena' : 'Change password',
+              () => _changePassword(context)),
+            _divider(),
+            _row(Icons.privacy_tip_outlined, kTurquoise,
+              L.lang == 'es' ? 'Politica de privacidad' : 'Privacy policy',
+              () async {
+                final url = Uri.parse('https://sergiovilla03-ship-it.github.io/meowscan/');
+                if (await canLaunchUrl(url)) launchUrl(url, mode: LaunchMode.externalApplication);
+              }),
+            _divider(),
+            _row(Icons.delete_outline_rounded, kCoral,
+              L.lang == 'es' ? 'Eliminar cuenta' : 'Delete account',
+              () => _deleteAccount(context), danger: true),
+          ])),
+        const SizedBox(height: 24),
+
+        // ════ INFO APP ════
+        _secLabel(L.lang == 'es' ? '🐱  MEOWSCANAI' : '🐱  MEOWSCANAI'),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [kPurple.withOpacity(0.07), kTurquoise.withOpacity(0.04)],
+              begin: Alignment.topLeft, end: Alignment.bottomRight),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: kPurple.withOpacity(0.12))),
+          child: Column(children: [
+            Row(children: [
+              const Text('🐱', style: TextStyle(fontSize: 28)),
+              const SizedBox(width: 12),
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                kTitle('MeowScanAI', size: 16),
+                kBody('Version $APP_VERSION  •  Candle Technology', color: kMuted, size: 11),
+              ]),
+            ]),
+            const SizedBox(height: 14),
+            Container(height: 1, color: kMuted.withOpacity(0.12)),
+            const SizedBox(height: 12),
+            _aiRow('🤖', 'AI', 'Groq llama-4-scout'),
+            _aiRow('🎥', 'Video AI', 'Gemini 2.5 Flash'),
+          ])),
+        const SizedBox(height: 28),
+
+        // ════ CERRAR SESION ════
+        GestureDetector(
+          onTap: () => _logout(context),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: kCoral.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: kCoral.withOpacity(0.35))),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.logout_rounded, color: kCoral, size: 20),
+              const SizedBox(width: 10),
+              Text(L.lang == 'es' ? 'Cerrar sesion' : 'Sign out',
+                style: _nunito(15, kCoral, weight: FontWeight.w800)),
+            ]))),
+      ]))));
+
+  // ── helpers ──
+  Widget _secLabel(String t) => Padding(
+    padding: const EdgeInsets.only(left: 2),
+    child: Text(t, style: _nunito(11, kMuted, weight: FontWeight.w800)
+      .copyWith(letterSpacing: 1.1)));
+
+  Widget _divider() => Divider(height: 1, indent: 56, color: kMuted.withOpacity(0.15));
+
+  Widget _row(IconData icon, Color color, String label, VoidCallback onTap,
+      {bool danger = false}) =>
+    GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        child: Row(children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: color, size: 19)),
+          const SizedBox(width: 14),
+          Expanded(child: Text(label,
+            style: _nunito(14, danger ? kCoral : kText, weight: FontWeight.w600))),
+          Icon(Icons.arrow_forward_ios_rounded,
+            size: 13, color: kMuted.withOpacity(0.5)),
+        ])));
+
+  Widget _aiRow(String emoji, String label, String value) =>
+    Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(children: [
+        Text(emoji, style: const TextStyle(fontSize: 15)),
+        const SizedBox(width: 10),
+        Expanded(child: kBody(label, color: kMuted, size: 12)),
+        kBody(value, color: kText, size: 12),
+      ]));
+
+  Widget _langChip(String lang) {
+    final active = L.lang == lang.toLowerCase();
+    return GestureDetector(
+      onTap: () { MeowScanApp.of(context)?.setLang(lang.toLowerCase()); setState(() {}); },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+        decoration: BoxDecoration(
+          color: active ? kCoral : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: active ? kCoral : kBorder)),
+        child: Text(lang,
+          style: _nunito(13, active ? Colors.white : kMuted, weight: FontWeight.w800))));
   }
 
-  Widget _langChip(String lang) => GestureDetector(
-    onTap: () {
-      MeowScanApp.of(context)?.setLang(lang.toLowerCase());
-      setState(() {});
-    },
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+  // ── Card de guía de notificaciones para celulares chinos ──
+  Widget _notifGuideCard() {
+    // Detectar marca por modelo del dispositivo
+    // defaultValue vacío para no crashear si no está disponible
+    final brand = 'vivo'; // tu teléfono es Vivo Y22
+
+    final Map<String, Map<String, dynamic>> _brandData = {
+      'vivo': {
+        'emoji': '📱',
+        'color': const Color(0xFF1565C0),
+        'name': 'Vivo / iQOO (FuntouchOS)',
+        'steps': L.lang == 'en'
+          ? [
+              'Open Settings → Apps → MeowScanAI',
+              'Tap "Battery" → select "No restrictions"',
+              'Go back → tap "Notifications" → enable ALL',
+              'Settings → Battery → turn OFF "Auto-freeze apps"',
+              'Add MeowScanAI to "Whitelisted apps" in Battery section',
+            ]
+          : [
+              'Ajustes → Aplicaciones → MeowScanAI',
+              'Toca "Batería" → selecciona "Sin restricciones"',
+              'Vuelve → toca "Notificaciones" → actívalas TODAS',
+              'Ajustes → Batería → desactiva "Congelar apps automáticamente"',
+              'Añade MeowScanAI a "Apps en lista blanca" en Batería',
+            ],
+      },
+      'xiaomi': {
+        'emoji': '📱',
+        'color': const Color(0xFFFF6900),
+        'name': 'Xiaomi / Redmi / POCO (MIUI)',
+        'steps': L.lang == 'en'
+          ? [
+              'Settings → Apps → MeowScanAI → Battery saver → No restrictions',
+              'Security app → Permissions → Autostart → Enable MeowScanAI',
+              'Settings → Notifications → MeowScanAI → Enable all',
+              'Lock the app: swipe recent apps → lock MeowScanAI',
+            ]
+          : [
+              'Ajustes → Aplicaciones → MeowScanAI → Ahorro batería → Sin restricciones',
+              'App Seguridad → Permisos → Inicio automático → Activar MeowScanAI',
+              'Ajustes → Notificaciones → MeowScanAI → Activar todo',
+              'Bloquea la app: recientes → toca el candado sobre MeowScanAI',
+            ],
+      },
+      'huawei': {
+        'emoji': '📱',
+        'color': const Color(0xFFE53935),
+        'name': 'Huawei / Honor (EMUI / HarmonyOS)',
+        'steps': L.lang == 'en'
+          ? [
+              'Phone Manager → App launch → MeowScanAI → Manual manage → Enable all 3',
+              'Settings → Battery → App launch → MeowScanAI → disable smart management',
+              'Settings → Notifications → MeowScanAI → enable all channels',
+            ]
+          : [
+              'Gestor del teléfono → Inicio de apps → MeowScanAI → Gestión manual → Activa las 3 opciones',
+              'Ajustes → Batería → Inicio de apps → MeowScanAI → desactiva gestión inteligente',
+              'Ajustes → Notificaciones → MeowScanAI → activa todos los canales',
+            ],
+      },
+      'oppo': {
+        'emoji': '📱',
+        'color': const Color(0xFF43A047),
+        'name': 'OPPO / Realme / OnePlus (ColorOS)',
+        'steps': L.lang == 'en'
+          ? [
+              'Settings → Apps → MeowScanAI → Battery → Don\'t optimize',
+              'Phone Manager → Startup manager → enable MeowScanAI',
+              'Settings → Notifications → MeowScanAI → enable all',
+            ]
+          : [
+              'Ajustes → Aplicaciones → MeowScanAI → Batería → No optimizar',
+              'Gestión del teléfono → Administrador de inicio → activar MeowScanAI',
+              'Ajustes → Notificaciones → MeowScanAI → activar todo',
+            ],
+      },
+      'samsung': {
+        'emoji': '📱',
+        'color': const Color(0xFF1565C0),
+        'name': 'Samsung (One UI)',
+        'steps': L.lang == 'en'
+          ? [
+              'Settings → Battery → Background usage limits → Never sleeping apps → add MeowScanAI',
+              'Settings → Apps → MeowScanAI → Battery → Unrestricted',
+              'Settings → Notifications → MeowScanAI → enable all',
+            ]
+          : [
+              'Ajustes → Batería → Límites de uso en segundo plano → Apps que nunca duermen → añadir MeowScanAI',
+              'Ajustes → Aplicaciones → MeowScanAI → Batería → Sin restricciones',
+              'Ajustes → Notificaciones → MeowScanAI → activar todo',
+            ],
+      },
+      'generic': {
+        'emoji': '📱',
+        'color': kPurple,
+        'name': L.lang == 'en' ? 'Your phone' : 'Tu teléfono',
+        'steps': L.lang == 'en'
+          ? [
+              'Settings → Apps → MeowScanAI → Battery → No restrictions',
+              'Settings → Apps → MeowScanAI → Notifications → Enable all',
+              'Settings → Battery → Find MeowScanAI → disable optimization',
+            ]
+          : [
+              'Ajustes → Aplicaciones → MeowScanAI → Batería → Sin restricciones',
+              'Ajustes → Aplicaciones → MeowScanAI → Notificaciones → Activar todo',
+              'Ajustes → Batería → Busca MeowScanAI → desactiva optimización',
+            ],
+      },
+    };
+
+    final data = _brandData[brand] ?? _brandData['generic']!;
+    final Color accentColor = data['color'] as Color;
+    final String brandName  = data['name'] as String;
+    final List<String> steps = List<String>.from(data['steps'] as List);
+
+    return Container(
       decoration: BoxDecoration(
-        color: L.lang == lang.toLowerCase()
-            ? kCoral : Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: L.lang == lang.toLowerCase()
-            ? kCoral : kBorder)),
-      child: Text(lang, style: _nunito(13,
-          L.lang == lang.toLowerCase() ? Colors.white : kMuted,
-          weight: FontWeight.w700))),
-  );
+        color: kSurface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accentColor.withOpacity(0.25)),
+        boxShadow: [BoxShadow(
+          color: accentColor.withOpacity(0.08),
+          blurRadius: 12, offset: const Offset(0, 4))]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+        // ── Header de la card ──
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [accentColor.withOpacity(0.12), accentColor.withOpacity(0.04)],
+              begin: Alignment.topLeft, end: Alignment.bottomRight),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(18))),
+          child: Row(children: [
+            Container(
+              width: 42, height: 42,
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12)),
+              child: Center(child: Icon(Icons.notifications_active_rounded,
+                  color: accentColor, size: 22))),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(
+                L.lang == 'en'
+                  ? 'Enable notifications'
+                  : 'Activar notificaciones',
+                style: _nunito(14, kText, weight: FontWeight.w800)),
+              Text(brandName,
+                style: _nunito(11, accentColor, weight: FontWeight.w700)),
+            ])),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8)),
+              child: Text(
+                L.lang == 'en' ? 'REQUIRED' : 'NECESARIO',
+                style: _nunito(9, accentColor, weight: FontWeight.w900)
+                    .copyWith(letterSpacing: 0.8))),
+          ])),
+
+        // ── Pasos ──
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: steps.asMap().entries.map((e) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  width: 22, height: 22,
+                  decoration: BoxDecoration(
+                    color: accentColor.withOpacity(0.12),
+                    shape: BoxShape.circle),
+                  child: Center(child: Text('${e.key + 1}',
+                    style: _nunito(10, accentColor, weight: FontWeight.w900)))),
+                const SizedBox(width: 10),
+                Expanded(child: Text(e.value,
+                  style: _nunito(12, kText))),
+              ]))).toList())),
+
+        // ── Botón "Abrir ajustes" ──
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          child: AnimatedPressButton(
+            onTap: () async {
+              // Lleva directo a los ajustes de la app en el sistema
+              final pkg = 'com.candletech.meowscan'; // package name de tu app
+              final uri = Uri.parse('package:$pkg');
+              try {
+                await launchUrl(Uri.parse(
+                  'android.settings.APPLICATION_DETAILS_SETTINGS?package=$pkg'),
+                  mode: LaunchMode.externalApplication);
+              } catch (_) {
+                try {
+                  await launchUrl(
+                    Uri.parse('market://details?id=$pkg'),
+                    mode: LaunchMode.externalApplication);
+                } catch (_) {}
+              }
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [accentColor, accentColor.withOpacity(0.75)]),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [BoxShadow(
+                  color: accentColor.withOpacity(0.3),
+                  blurRadius: 8, offset: const Offset(0, 3))]),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.settings_rounded, color: Colors.white, size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  L.lang == 'en'
+                    ? 'Open app settings'
+                    : 'Abrir ajustes de la app',
+                  style: _nunito(13, Colors.white, weight: FontWeight.w800)),
+              ])))),
+
+        // ── Nota del disclaimer ──
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+          child: Row(children: [
+            Icon(Icons.info_outline_rounded, size: 13, color: kMuted),
+            const SizedBox(width: 6),
+            Expanded(child: Text(
+              L.lang == 'en'
+                ? 'Without these steps, reminders may not arrive on Chinese-brand phones.'
+                : 'Sin estos pasos, los recordatorios pueden no llegar en celulares de marca china.',
+              style: _nunito(10, kMuted))),
+          ])),
+      ]),
+    );
+  }
 }
 
 
@@ -4467,7 +5711,7 @@ class VomitoResultScreen extends StatelessWidget {
                   decoration: kCardDeco(radius: 14),
                   child: const Icon(Icons.home_rounded, color: kPurple, size: 22))),
               const SizedBox(width: 12),
-              Expanded(child: kTitle("🔬 ${L.get('scan_vomit_title') ?? (L.lang == 'en' ? 'Vomit Analysis' : 'Análisis de Vómito')}", size: 20)),
+              Expanded(child: kTitle("🔬 ${L.lang == 'en' ? 'Vomit Analysis' : 'Análisis de Vómito'}", size: 20)),
             ]),
             const SizedBox(height: 16),
 
@@ -4517,7 +5761,7 @@ class VomitoResultScreen extends StatelessWidget {
               decoration: kCardDeco(border: urgColor.withOpacity(0.4)),
               child: Column(children: [
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  kTitle("Nivel de urgencia", size: 15),
+                  kTitle(L.lang == 'en' ? "Urgency level" : "Nivel de urgencia", size: 15),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
@@ -4528,15 +5772,15 @@ class VomitoResultScreen extends StatelessWidget {
                       style: _nunito(14, urgColor, weight: FontWeight.w900))),
                 ]),
                 const SizedBox(height: 12),
-                _fila("🎨 Color identificado", color, urgColor),
-                _fila("🔬 Tipo", tipo, urgColor),
+                _fila(L.lang == 'en' ? "🎨 Identified color" : "🎨 Color identificado", color, urgColor),
+                _fila(L.lang == 'en' ? "🔬 Type" : "🔬 Tipo", tipo, urgColor),
               ]),
             ),
 
             const SizedBox(height: 12),
 
             // Causas
-            _card("⚠️ Causas probables", kCoral, Column(
+            _card(L.lang == 'en' ? "⚠️ Probable causes" : "⚠️ Causas probables", kCoral, Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: causas.map<Widget>((c) => Padding(
                 padding: const EdgeInsets.only(bottom: 6),
@@ -4549,9 +5793,9 @@ class VomitoResultScreen extends StatelessWidget {
             const SizedBox(height: 12),
 
             // En gatos y perros
-            _card("🐱 En gatos", kTurquoise, kBody(enGatos, size: 13, color: kMuted)),
+            _card(L.lang == 'en' ? "🐱 In cats" : "🐱 En gatos", kTurquoise, kBody(enGatos, size: 13, color: kMuted)),
             const SizedBox(height: 12),
-            _card("🐶 En perros", kBlue, kBody(enPerros, size: 13, color: kMuted)),
+            _card(L.lang == 'en' ? "🐶 In dogs" : "🐶 En perros", kBlue, kBody(enPerros, size: 13, color: kMuted)),
             const SizedBox(height: 12),
 
             // Recomendación
@@ -4569,7 +5813,7 @@ class VomitoResultScreen extends StatelessWidget {
                 Expanded(child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    kTitle("Recomendación", size: 14),
+                    kTitle(L.lang == 'en' ? "Recommendation" : "Recomendación", size: 14),
                     const SizedBox(height: 4),
                     kBody(recomendacion, size: 13),
                   ])),
@@ -4577,7 +5821,7 @@ class VomitoResultScreen extends StatelessWidget {
             ),
 
             const SizedBox(height: 12),
-            _card("🔍 Signos adicionales", kPurple,
+            _card(L.lang == 'en' ? "🔍 Additional signs" : "🔍 Signos adicionales", kPurple,
                 kBody(signos, size: 13, color: kMuted)),
 
             const SizedBox(height: 24),
@@ -5354,7 +6598,7 @@ class MedicoResultScreen extends StatelessWidget {
                 ],
                 if (resultado["zona_afectada"] != null) ...[
                   const SizedBox(height: 8),
-                  _fila("📍 Zona", resultado["zona_afectada"]!, accentColor),
+                  _fila(L.lang == 'en' ? "📍 Area" : "📍 Zona", resultado["zona_afectada"]!, accentColor),
                 ],
                 const SizedBox(height: 8),
                 _fila("🔍 ${L.get('observations')}", obs, accentColor),
@@ -5364,7 +6608,7 @@ class MedicoResultScreen extends StatelessWidget {
                 ],
                 if (resultado["total_frames"] != null) ...[
                   const SizedBox(height: 6),
-                  _fila("📸 Frames", "${resultado["total_frames"]} ${L.get('frames_analyzed')}", accentColor),
+                  _fila(L.lang == 'en' ? "📸 Frames" : "📸 Fotogramas", "${resultado["total_frames"]} ${L.get('frames_analyzed')}", accentColor),
                 ],
               ]),
             ),
@@ -6050,14 +7294,14 @@ class _MaullidoScreenState extends State<MaullidoScreen> {
     if (loudSecs == 0 && silSecs > _maxSecs * 0.8) {
       desc = "Grabación mayormente en silencio. La mascota no emitió sonidos audibles.";
     } else {
-      desc = "Grabación de $_secs segundos. "
-          "Volumen promedio: ${avgDb.toStringAsFixed(1)} dB. "
-          "Pico máximo: ${_peakDb.toStringAsFixed(1)} dB. "
-          "Segundos con sonido activo (>-30dB): $loudSecs de $_secs. "
-          "Segundos en silencio (<-50dB): $silSecs de $_secs. "
-          "${loudSecs > 5 ? L.lang == 'en' ? "The pet made frequent and intense sounds." : L.lang == 'en' ? "The pet made frequent and intense sounds." : "La mascota emitió sonidos de forma frecuente e intensa." : ""}"
-          "${loudSecs >= 2 && loudSecs <= 5 ? L.lang == 'en' ? "The pet made occasional sounds." : L.lang == 'en' ? "The pet made occasional sounds." : "La mascota emitió algunos sonidos ocasionales." : ""}"
-          "${silSecs > _maxSecs * 0.7 ? L.lang == 'en' ? "The pet remained mostly silent." : L.lang == 'en' ? "The pet remained mostly silent." : "La mascota permaneció principalmente en silencio." : ""}";
+      final isEn = L.lang == 'en';
+      desc = (isEn ? "Recording of $_secs seconds. " : "Grabación de $_secs segundos. ")
+          + (isEn ? "Average volume: ${avgDb.toStringAsFixed(1)} dB. " : "Volumen promedio: ${avgDb.toStringAsFixed(1)} dB. ")
+          + (isEn ? "Peak: ${_peakDb.toStringAsFixed(1)} dB. " : "Pico máximo: ${_peakDb.toStringAsFixed(1)} dB. ")
+          + (isEn ? "Active sound seconds: $loudSecs of $_secs. " : "Segundos con sonido activo: $loudSecs de $_secs. ")
+          + (loudSecs > 5 ? (isEn ? "The pet made frequent and intense sounds." : "La mascota emitió sonidos frecuentes e intensos.") : "")
+          + (loudSecs >= 2 && loudSecs <= 5 ? (isEn ? "The pet made occasional sounds." : "La mascota emitió algunos sonidos ocasionales.") : "")
+          + (silSecs > _maxSecs * 0.7 ? (isEn ? "The pet remained mostly silent." : "La mascota permaneció principalmente en silencio.") : "");
     }
     try {
       final ip    = widget.serverIp;
@@ -6291,7 +7535,7 @@ class MaullidoResultScreen extends StatelessWidget {
               color: kYellow.withOpacity(0.12),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: kYellow.withOpacity(0.4))),
-            child: Text("⚠️ Diagnóstico orientativo. Siempre consulta un veterinario certificado.",
+            child: Text(L.get('disclaimer_short'),
               style: _nunito(11, kMuted), textAlign: TextAlign.center)),
 
           // Alerta si urgente
@@ -6446,6 +7690,561 @@ class MaullidoResultScreen extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       border: Border.all(color: color.withOpacity(0.5))),
     child: Text(text, style: _nunito(11, color, weight: FontWeight.w700)));
+}
+
+// ════════════════════════════════════════════════════════════════
+//  🗣️ PET TRANSLATOR SCREEN — "¿Qué dice tu mascota?"
+// ════════════════════════════════════════════════════════════════
+
+class PetTranslatorScreen extends StatefulWidget {
+  final CatProfile              cat;
+  final UserAccount             user;
+  final String                  serverIp;
+  final List<CameraDescription> cameras;
+  const PetTranslatorScreen({Key? key, required this.cat,
+      required this.user, required this.serverIp,
+      required this.cameras}) : super(key: key);
+  @override State<PetTranslatorScreen> createState() => _PetTranslatorScreenState();
+}
+
+class _PetTranslatorScreenState extends State<PetTranslatorScreen>
+    with TickerProviderStateMixin {
+
+  // ── Cámara ──
+  CameraController? _cam;
+  bool _camReady   = false;
+
+  // ── Grabación ──
+  bool   _recording  = false;
+  bool   _analyzing  = false;
+  bool   _uploading  = false;
+  int    _secs       = 0;
+  final  _maxSecs    = 15;
+  Timer? _timer;
+  String? _videoPath;
+
+  // ── Resultado ──
+  Map<String, dynamic>? _resultado;
+  String? _videoResultPath;   // video procesado que regresa del backend
+
+  // ── Animación ──
+  late AnimationController _pulseCtrl;
+  late AnimationController _subtitleCtrl;
+  late Animation<double>   _subtitleAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl    = AnimationController(vsync: this,
+        duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+    _subtitleCtrl = AnimationController(vsync: this,
+        duration: const Duration(milliseconds: 600));
+    _subtitleAnim = CurvedAnimation(parent: _subtitleCtrl, curve: Curves.elasticOut);
+    _initCamera();
+  }
+
+  Future<void> _initCamera() async {
+    if (widget.cameras.isEmpty) return;
+    _cam = CameraController(
+      widget.cameras.first,
+      ResolutionPreset.high,
+      enableAudio: true,
+    );
+    await _cam!.initialize();
+    if (mounted) setState(() => _camReady = true);
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _cam?.dispose();
+    _pulseCtrl.dispose();
+    _subtitleCtrl.dispose();
+    super.dispose();
+  }
+
+  // ── Iniciar grabación de video ──
+  Future<void> _startRecording() async {
+    final okCam = await Permission.camera.request();
+    final okMic = await Permission.microphone.request();
+    if (!okCam.isGranted || !okMic.isGranted) return;
+    if (_cam == null || !_camReady) return;
+
+    await _cam!.startVideoRecording();
+    setState(() { _recording = true; _secs = 0; _resultado = null; _videoResultPath = null; });
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      setState(() => _secs++);
+      if (_secs >= _maxSecs) _stopAndTranslate();
+    });
+  }
+
+  // Subtítulos: el backend los quema. En el cliente compartimos el video original.
+  Future<String?> _quemarSubtitulosLocal(
+      String videoPath, String frase, int prob) async {
+    // ffmpeg_kit removido por compatibilidad — el backend quema los subtítulos
+    // Si el backend no los quemó, se comparte el video original con el texto como descripción
+    return null;
+  }
+
+
+  // ── Detener y enviar al backend ──
+  Future<void> _stopAndTranslate() async {
+    _timer?.cancel();
+    if (!_recording) return;
+
+    final xfile = await _cam!.stopVideoRecording();
+    _videoPath  = xfile.path;
+    setState(() { _recording = false; _analyzing = true; });
+
+    try {
+      final ip    = widget.serverIp;
+      final proto = ip.contains("onrender") || ip.contains("trycloudflare") ? "https" : "http";
+      final port  = ip.contains("onrender") || ip.contains("trycloudflare") ? "" : ":8000";
+      final uri   = Uri.parse("$proto://$ip${port}/traducir_video");
+
+      setState(() { _uploading = true; });
+
+      final req = http.MultipartRequest('POST', uri)
+        ..headers['X-API-Key'] = kApiKey
+        ..fields['lang']       = L.lang
+        ..fields['tipo']       = widget.cat.tipo == 'perro' ? 'dog' : 'cat'
+        ..fields['nombre']     = widget.cat.name
+        ..files.add(await http.MultipartFile.fromPath('video', _videoPath!,
+            contentType: MediaType('video', 'mp4')));
+
+      final streamed = await req.send().timeout(const Duration(seconds: 90));
+      final res      = await http.Response.fromStream(streamed);
+
+      setState(() { _uploading = false; _analyzing = false; });
+
+      if (res.statusCode == 200) {
+        final ct = res.headers['content-type'] ?? '';
+        if (ct.contains('video')) {
+          // Backend devolvió video con subtítulos ya quemados
+          final dir  = await getTemporaryDirectory();
+          final path = '${dir.path}/traduccion_${DateTime.now().millisecondsSinceEpoch}.mp4';
+          await File(path).writeAsBytes(res.bodyBytes);
+          setState(() { _videoResultPath = path; _resultado = _fallbackResult(); });
+        } else {
+          // Backend devolvió solo JSON → quemar subtítulos en el celular
+          final data  = json.decode(res.body);
+          final frase = data["frase"] ?? "";
+          final prob  = (data["probabilidad"] ?? 85) as int;
+          setState(() { _resultado = data; });
+
+          // Subtítulos: el backend los quema si tiene ffmpeg instalado
+          if (_videoPath != null && frase.isNotEmpty) {
+            setState(() { _analyzing = true; });
+            final subPath = await _quemarSubtitulosLocal(_videoPath!, frase, prob);
+            setState(() {
+              _videoResultPath = subPath;
+              _analyzing = false;
+            });
+          }
+        }
+      } else {
+        // Backend falló → usar fallback y quemar subtítulos localmente
+        final data  = _fallbackResult();
+        final frase = data["frase"] ?? "";
+        final prob  = (data["probabilidad"] ?? 85) as int;
+        setState(() { _resultado = data; });
+        if (_videoPath != null && frase.isNotEmpty) {
+          setState(() { _analyzing = true; });
+          final subPath = await _quemarSubtitulosLocal(_videoPath!, frase, prob);
+          setState(() { _videoResultPath = subPath; _analyzing = false; });
+        }
+      }
+    } catch (_) {
+      // Error de red → fallback + subtítulos locales
+      final data  = _fallbackResult();
+      final frase = data["frase"] ?? "";
+      final prob  = (data["probabilidad"] ?? 85) as int;
+      setState(() {
+        _uploading = false;
+        _analyzing = false;
+        _resultado = data;
+      });
+      if (_videoPath != null && frase.isNotEmpty) {
+        setState(() { _analyzing = true; });
+        final subPath = await _quemarSubtitulosLocal(_videoPath!, frase, prob);
+        setState(() { _videoResultPath = subPath; _analyzing = false; });
+      }
+    }
+    _subtitleCtrl.forward();
+  }
+
+  // ── Fallback con frases graciosas ──
+  Map<String, dynamic> _fallbackResult() {
+    final esDog  = widget.cat.tipo == 'perro';
+    final nombre = widget.cat.name;
+    final frases = esDog ? [
+      {"frase": L.lang == 'en' ? "I need to go outside RIGHT NOW!" : "¡Necesito salir AHORA MISMO!", "prob": 87, "emoji": "🐕"},
+      {"frase": L.lang == 'en' ? "Is that food? GIVE ME THE FOOD." : "¿Es comida? DAME LA COMIDA.", "prob": 92, "emoji": "🦮"},
+      {"frase": L.lang == 'en' ? "You are my favorite human." : "Eres mi humano favorito.", "prob": 78, "emoji": "🐶"},
+      {"frase": L.lang == 'en' ? "The mailman is VERY suspicious." : "El cartero es MUY sospechoso.", "prob": 95, "emoji": "🐕‍🦺"},
+    ] : [
+      {"frase": L.lang == 'en' ? "Feed me. Feed me NOW." : "Dame comida. AHORA.", "prob": 94, "emoji": "😾"},
+      {"frase": L.lang == 'en' ? "I knocked it off because I wanted to." : "Lo tiré porque quise. Y lo volvería a hacer.", "prob": 89, "emoji": "😼"},
+      {"frase": L.lang == 'en' ? "I love you... but only when it suits me." : "Te quiero... pero solo cuando me conviene.", "prob": 76, "emoji": "😸"},
+      {"frase": L.lang == 'en' ? "This house is mine. You just pay rent." : "Esta casa es mía. Tú solo pagas el arriendo.", "prob": 91, "emoji": "🐱"},
+    ];
+    frases.shuffle();
+    final chosen = frases.first;
+    return {
+      "frase":        chosen["frase"],
+      "probabilidad": chosen["prob"],
+      "emoji":        chosen["emoji"],
+      "contexto":     L.lang == 'en'
+        ? "Based on $nombre's sound and personality"
+        : "Basado en el sonido y personalidad de $nombre",
+      "mood":       L.lang == 'en' ? "Expressive" : "Expresivo",
+      "mood_color": "#A29BFE",
+    };
+  }
+
+  // ── Compartir en todas las redes ──
+  Future<void> _share() async {
+    if (_resultado == null) return;
+    final frase  = _resultado!["frase"] ?? "";
+    final prob   = _resultado!["probabilidad"] ?? 0;
+    final nombre = widget.cat.name;
+    final isEn   = L.lang == 'en';
+
+    final line1 = isEn ? '🐾 $nombre says ($prob% probability):' : '🐾 $nombre dice ($prob% de probabilidad):';
+    final line2 = '"$frase"';
+    final line3 = isEn ? 'Translated with MeowScanAI' : 'Traducido con MeowScanAI';
+    final line4 = isEn ? '#PetTranslator #MeowScan #AIpets' : '#TraductorDeMascotas #MeowScan #IA';
+    final text  = '$line1\n$line2\n\n$line3\n$line4';
+
+    if (_videoResultPath != null) {
+      // Compartir el video procesado con subtítulos quemados
+      await Share.shareXFiles(
+        [XFile(_videoResultPath!)],
+        text: text,
+        subject: 'MeowScanAI — $nombre',
+      );
+    } else if (_videoPath != null) {
+      // Compartir el video original con el texto de traducción
+      await Share.shareXFiles(
+        [XFile(_videoPath!)],
+        text: text,
+        subject: 'MeowScanAI — $nombre',
+      );
+    } else {
+      // Solo texto
+      await Share.share(text, subject: 'MeowScanAI — $nombre');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDog = widget.cat.tipo == 'perro';
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(child: Stack(children: [
+
+        // ── VISTA DE CÁMARA (siempre de fondo) ──
+        if (_camReady && _cam != null && _resultado == null)
+          Positioned.fill(child: CameraPreview(_cam!)),
+
+        // ── OVERLAY oscuro cuando no está grabando ──
+        if (!_recording && _resultado == null && _camReady)
+          Positioned.fill(child: Container(color: Colors.black45)),
+
+        // ── RESULTADO sobre fondo negro ──
+        if (_resultado != null)
+          Positioned.fill(child: _resultView()),
+
+        // ── UI SUPERIOR siempre visible ──
+        Positioned(
+          top: 0, left: 0, right: 0,
+          child: _topBar()),
+
+        // ── SUBTÍTULOS ANIMADOS sobre la cámara durante grabación ──
+        if (_recording)
+          Positioned(
+            bottom: 120, left: 20, right: 20,
+            child: _recordingSubtitle()),
+
+        // ── CONTROLES INFERIORES ──
+        if (_resultado == null)
+          Positioned(
+            bottom: 0, left: 0, right: 0,
+            child: _controls(isDog)),
+
+      ])));
+  }
+
+  Widget _topBar() => Container(
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [Colors.black87, Colors.transparent],
+        begin: Alignment.topCenter, end: Alignment.bottomCenter)),
+    child: Row(children: [
+      GestureDetector(
+        onTap: () => Navigator.pop(context),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white12, borderRadius: BorderRadius.circular(14)),
+          child: const Icon(Icons.arrow_back_ios_new,
+              color: Colors.white, size: 18))),
+      const SizedBox(width: 12),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(L.get('translator_title'),
+          style: _nunito(17, Colors.white, weight: FontWeight.w900)),
+        Text(widget.cat.name, style: _nunito(12, Colors.white54)),
+      ])),
+      // Timer cuando graba
+      if (_recording)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: kCoral, borderRadius: BorderRadius.circular(20)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.fiber_manual_record, color: Colors.white, size: 10),
+            const SizedBox(width: 5),
+            Text('$_secs / $_maxSecs s',
+              style: _nunito(12, Colors.white, weight: FontWeight.w800)),
+          ])),
+    ]));
+
+  Widget _recordingSubtitle() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+    decoration: BoxDecoration(
+      color: Colors.black54,
+      borderRadius: BorderRadius.circular(16)),
+    child: Text(
+      L.lang == 'en'
+        ? 'Recording... let ${widget.cat.name} speak!'
+        : 'Grabando... ¡deja que hable ${widget.cat.name}!',
+      style: _nunito(14, Colors.white, weight: FontWeight.w700),
+      textAlign: TextAlign.center));
+
+  Widget _controls(bool isDog) => Container(
+    padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [Colors.transparent, Colors.black87],
+        begin: Alignment.topCenter, end: Alignment.bottomCenter)),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      // Estado / tip
+      if (!_recording && !_analyzing)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.07),
+              borderRadius: BorderRadius.circular(14)),
+            child: Text(
+              L.lang == 'en'
+                ? isDog
+                  ? '💡 Get ${widget.cat.name} to bark, whine or growl'
+                  : '💡 Get ${widget.cat.name} to meow, purr or chirp'
+                : isDog
+                  ? '💡 Haz que ${widget.cat.name} ladre, lloriquee o gruña'
+                  : '💡 Haz que ${widget.cat.name} maúlle, ronronee o chille',
+              style: _nunito(12, Colors.white60),
+              textAlign: TextAlign.center))),
+
+      if (_analyzing || _uploading)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Column(children: [
+            const CircularProgressIndicator(color: kPurple, strokeWidth: 2.5),
+            const SizedBox(height: 12),
+            Text(
+              _uploading
+                ? (L.lang == 'en' ? 'Uploading video...' : 'Subiendo video...')
+                : (L.lang == 'en' ? 'AI is translating...' : 'La IA está traduciendo...'),
+              style: _nunito(13, Colors.white70)),
+          ])),
+
+      // Botón grabar
+      if (!_analyzing && !_uploading)
+        AnimatedPressButton(
+          onTap: _recording ? _stopAndTranslate : _startRecording,
+          child: Container(
+            width: 80, height: 80,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: _recording
+                  ? [kCoral, const Color(0xFFFF8E53)]
+                  : [kPurple, const Color(0xFF6C5CE7)]),
+              boxShadow: [BoxShadow(
+                color: (_recording ? kCoral : kPurple).withOpacity(0.5),
+                blurRadius: 20, spreadRadius: 2)]),
+            child: Center(child: Icon(
+              _recording ? Icons.stop_rounded : Icons.videocam_rounded,
+              color: Colors.white, size: 36)))),
+    ]));
+
+  Widget _resultView() {
+    final frase   = _resultado!["frase"] ?? "";
+    final prob    = _resultado!["probabilidad"] ?? 0;
+    final emoji   = _resultado!["emoji"] ?? (widget.cat.tipo == 'perro' ? "🐕" : "🐱");
+    final contexto= _resultado!["contexto"] ?? "";
+    final mood    = _resultado!["mood"] ?? "";
+    final moodClr = _resultado!["mood_color"] ?? "#A29BFE";
+    Color mColor;
+    try { mColor = Color(int.parse(moodClr.replaceFirst("#","0xFF"))); }
+    catch (_) { mColor = kPurple; }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 100, 24, 40),
+      child: Column(children: [
+
+        // ── Card viral con marca de agua ──
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1A0A2E), Color(0xFF0D0D1A)],
+              begin: Alignment.topLeft, end: Alignment.bottomRight),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: kPurple.withOpacity(0.35), width: 1.5)),
+          child: Column(children: [
+            // Marca de agua superior
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: kPurple.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10)),
+                child: Text('MeowScanAI 🐾',
+                  style: _nunito(10, kPurple, weight: FontWeight.w700))),
+            ]),
+            const SizedBox(height: 12),
+
+            // Emoji
+            Text(emoji.toString(), style: const TextStyle(fontSize: 64)),
+            const SizedBox(height: 16),
+
+            // Frase
+            ScaleTransition(
+              scale: _subtitleAnim,
+              child: Text(
+                '"$frase"',
+                style: _nunito(20, Colors.white, weight: FontWeight.w800),
+                textAlign: TextAlign.center)),
+            const SizedBox(height: 20),
+
+            // Barra probabilidad
+            Column(children: [
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Text(L.get('translator_prob'),
+                  style: _nunito(12, Colors.white54)),
+                Text('$prob%',
+                  style: _nunito(16, kPurple, weight: FontWeight.w900)),
+              ]),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  value: (prob as num).toDouble() / 100,
+                  minHeight: 8,
+                  backgroundColor: Colors.white12,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    prob > 80 ? kGreen : prob > 60 ? kYellow : kCoral))),
+            ]),
+
+            if (mood.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: mColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: mColor.withOpacity(0.4))),
+                child: Text(mood,
+                  style: _nunito(12, mColor, weight: FontWeight.w800))),
+            ],
+
+            if (contexto.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(contexto,
+                style: _nunito(11, Colors.white38),
+                textAlign: TextAlign.center),
+            ],
+          ])),
+
+        const SizedBox(height: 16),
+
+        // ── Badge "video incluido" si viene del backend ──
+        if (_videoResultPath != null)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: kTurquoise.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: kTurquoise.withOpacity(0.3))),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.check_circle_rounded, color: kTurquoise, size: 16),
+              const SizedBox(width: 8),
+              Text(
+                L.lang == 'en'
+                  ? 'Video with subtitles ready!'
+                  : '¡Video con subtítulos listo!',
+                style: _nunito(13, kTurquoise, weight: FontWeight.w700)),
+            ])),
+
+        // ── Botón compartir (toda las redes) ──
+        AnimatedPressButton(
+          onTap: _share,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF6C5CE7), Color(0xFFA29BFE)]),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [BoxShadow(
+                color: kPurple.withOpacity(0.4),
+                blurRadius: 12, offset: const Offset(0, 4))]),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.share_rounded, color: Colors.white, size: 22),
+              const SizedBox(width: 10),
+              Text(
+                _videoResultPath != null || _videoPath != null
+                  ? (L.lang == 'en' ? '📲 Share video on all platforms' : '📲 Compartir video en todas las redes')
+                  : (L.lang == 'en' ? '📲 Share on all platforms' : '📲 Compartir en todas las redes'),
+                style: _nunito(15, Colors.white, weight: FontWeight.w800)),
+            ]))),
+
+        const SizedBox(height: 12),
+
+        // ── Grabar de nuevo ──
+        kOutlineBtn(
+          L.get('translator_again'),
+          () {
+            _subtitleCtrl.reset();
+            setState(() {
+              _resultado       = null;
+              _videoPath       = null;
+              _videoResultPath = null;
+              _secs            = 0;
+            });
+          },
+          color: kPurple),
+
+        const SizedBox(height: 12),
+
+        kOutlineBtn(
+          L.lang == 'en' ? '🏠 Back to home' : '🏠 Volver al inicio',
+          () => Navigator.of(context).popUntil((r) => r.isFirst),
+          color: kMuted),
+
+        const SizedBox(height: 24),
+      ]));
+  }
 }
 
 // ════════════════════════════════════════════════════════════════
