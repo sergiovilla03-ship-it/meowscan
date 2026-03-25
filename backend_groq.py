@@ -585,6 +585,24 @@ class MotorGroq:
 
             return texto_completado
 
+        def _podar_fragmentos_incompletos(fragmento: str) -> str:
+            """Elimina claves o valores cortados que quedaron inválidos al final."""
+            if not fragmento:
+                return fragmento
+
+            texto_podado = fragmento.rstrip()
+            while texto_podado:
+                original = texto_podado
+                texto_podado = re.sub(r',?\s*"[^"]*"?\s*}$', "}", texto_podado)
+                texto_podado = re.sub(r',?\s*"[^"]*"?\s*]$', "]", texto_podado)
+                texto_podado = re.sub(r',?\s*"[^"]*"?\s*:\s*$', "", texto_podado)
+                texto_podado = re.sub(r',?\s*"[^"]*"?\s*:\s*[^,\}\]]*$', "", texto_podado)
+                texto_podado = re.sub(r',\s*$', "", texto_podado)
+                if texto_podado == original:
+                    break
+
+            return texto_podado
+
         texto = texto.strip()
         # Strip markdown fences
         if "```json" in texto:
@@ -608,6 +626,7 @@ class MotorGroq:
         # Remove trailing commas
         texto = re.sub(r",[ \t\n\r]*}", "}", texto)
         texto = re.sub(r",[ \t\n\r]*]", "]", texto)
+        texto = _podar_fragmentos_incompletos(texto)
         texto = _completar_json_truncado(texto)
         # First try: direct parse
         try:
@@ -638,6 +657,7 @@ class MotorGroq:
         # Remove trailing commas again after cleanup
         texto_limpio = re.sub(r",[ \t\n\r]*}", "}", texto_limpio)
         texto_limpio = re.sub(r",[ \t\n\r]*]", "]", texto_limpio)
+        texto_limpio = _podar_fragmentos_incompletos(texto_limpio)
         texto_limpio = _completar_json_truncado(texto_limpio)
         try:
             return json.loads(texto_limpio)
@@ -657,6 +677,46 @@ class MotorGroq:
             return resultado
 
         raise ValueError(f"No se pudo parsear JSON: {texto[:200]}")
+
+    def _normalizar_resultado_maullido(self, resultado: Dict[str, Any], lang: str = "es") -> Dict[str, Any]:
+        """Completa campos faltantes del análisis de maullido con valores seguros."""
+        defaults_es = {
+            "sonido_detectado": True,
+            "tipo_sonido": "Maullido",
+            "intensidad": "Moderado",
+            "frecuencia": "Ocasional",
+            "estado_emocional": "Expresivo",
+            "estado_color": "#A29BFE",
+            "nivel_urgencia": "Normal",
+            "alerta_veterinario": False,
+            "interpretacion": "Tu gato se está comunicando contigo. El análisis llegó incompleto y fue corregido automáticamente.",
+            "posibles_causas": ["Busca atención", "Hambre", "Saludo"],
+            "recomendacion": "Observa el comportamiento y lenguaje corporal de tu gato para confirmar el contexto.",
+            "curiosidad_felina": "Los gatos suelen maullar más con humanos que con otros gatos.",
+        }
+        defaults_en = {
+            "sonido_detectado": True,
+            "tipo_sonido": "Meow",
+            "intensidad": "Moderate",
+            "frecuencia": "Occasional",
+            "estado_emocional": "Expressive",
+            "estado_color": "#A29BFE",
+            "nivel_urgencia": "Normal",
+            "alerta_veterinario": False,
+            "interpretacion": "Your cat is communicating with you. The analysis came back incomplete and was auto-corrected.",
+            "posibles_causas": ["Seeking attention", "Hunger", "Greeting"],
+            "recomendacion": "Observe your cat's behavior and body language to confirm the context.",
+            "curiosidad_felina": "Cats usually meow more to humans than to other cats.",
+        }
+
+        defaults = defaults_en if lang == "en" else defaults_es
+        normalizado = defaults.copy()
+        if isinstance(resultado, dict):
+            for clave, valor in resultado.items():
+                if valor not in (None, "", []):
+                    normalizado[clave] = valor
+        return normalizado
+
     def _llamar_gemini(self, img_b64: str, prompt: str, max_tokens: int = 2000) -> dict:
         """Llama a Groq Vision (llama-4-scout) con la imagen."""
         response = groq_client.chat.completions.create(
@@ -894,7 +954,7 @@ class MotorGroq:
             )
             response = model.generate_content(prompt_completo)
             texto = response.text.strip()
-            return self._extraer_json(texto)
+            return self._normalizar_resultado_maullido(self._extraer_json(texto), lang=lang)
         except Exception as e:
             print(f"❌ Maullido error: {e}")
             # Fallback result so the app always gets a valid response
