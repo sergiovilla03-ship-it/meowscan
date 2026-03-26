@@ -772,7 +772,9 @@ class MotorGroq:
     def analizar_con_groq(self, img_bgr: np.ndarray, lang: str = "es") -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
         try:
-            prompt = PROMPT_EN if lang == "en" else PROMPT_ES
+            prompt_base = PROMPT_EN if lang == "en" else PROMPT_ES
+            idioma_line = "Respond ONLY in English." if lang == "en" else "Responde SOLO en español."
+            prompt = f"{prompt_base}\\n{idioma_line}"
             return self._llamar_gemini(img_b64, prompt)
         except json.JSONDecodeError as e:
             print(f"⚠️ JSON parse error: {e}")
