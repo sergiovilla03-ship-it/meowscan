@@ -3358,6 +3358,9 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
   bool    _scanning = false, _sending = false;
   int     _frames   = 0;
   Map<String, dynamic>? _last;
+  Map<String, dynamic>? _bestValid;
+  bool    _navigating = false;
+  bool    _jsonWarned = false;
   String  _sesion   = DateTime.now().millisecondsSinceEpoch.toString();
   late AnimationController _ringCtrl;
 
@@ -3406,7 +3409,9 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       ));
       return;
     }
-    setState(() { _scanning = true; _secs = SCAN_DURATION; _frames = 0; _last = null; });
+    _navigating = false;
+    setState(() { _scanning = true; _secs = SCAN_DURATION; _frames = 0; _last = null; _bestValid = null; });
+    _capture();
     _scanTimer = Timer.periodic(Duration(milliseconds: FRAME_INTERVAL), (_) => _capture());
     _cdTimer   = Timer.periodic(const Duration(seconds: 1), (t) {
       setState(() => _secs--);
@@ -3428,16 +3433,40 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         ..headers['X-API-Key'] = kApiKey
         ..fields['lang'] = L.lang
         ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'f.jpg'));
+      debugPrint("General scan request to $uri");
       final s   = await req.send().timeout(const Duration(seconds: 10));
       final res = await http.Response.fromStream(s);
       if (res.statusCode == 200 && mounted) {
-        final data = json.decode(res.body) as Map<String, dynamic>;
-        setState(() {
-          if (_shouldKeepGeneralResult(data, _last)) {
-            _last = data;
+        final responseText = utf8.decode(res.bodyBytes, allowMalformed: true);
+        final data = _decodeGeneralJson(responseText);
+        if (data != null) {
+          final normalized = _normalizeGeneralPayload(data);
+          debugPrint("General scan parsed OK (${responseText.length} chars)");
+          debugPrint("Resp snippet: ${_truncate(responseText, 300)}");
+          debugPrint("Normalized mascota_detectada=${normalized['mascota_detectada']}, score=${_generalResultScore(normalized)}");
+          setState(() {
+            if (_shouldKeepGeneralResult(normalized, _bestValid)) {
+              _bestValid = normalized;
+              debugPrint("General scan kept valid: ${jsonEncode(_bestValid)}");
+            }
+            _frames++;
+            _jsonWarned = false;
+          });
+          if (_bestValid != null && !_navigating) {
+            _goToResults(_bestValid!);
           }
-          _frames++;
-        });
+        } else {
+          debugPrint("General scan: JSON parse failed. Body: ${_truncate(responseText, 400)}");
+          if (!_jsonWarned && mounted) {
+            _jsonWarned = true;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(L.lang == 'en'
+                ? 'We could not read the analysis result. Please try again.'
+                : 'No pudimos leer el resultado del an\u00e1lisis. Intenta de nuevo.'),
+              duration: const Duration(seconds: 3),
+            ));
+          }
+        }
       }
     } catch (_) {} finally {
       if (mounted) setState(() => _sending = false);
@@ -3446,15 +3475,20 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
 
   int _generalResultScore(Map<String, dynamic>? data) {
     if (data == null || data.isEmpty) return -1;
+    final normalized = _normalizeGeneralPayload(data);
     var score = 0;
-    if (data['mascota_detectada'] == true) score += 2;
-    if ((data['raza']?['raza'] ?? '').toString().isNotEmpty && data['raza']?['raza'] != '-') score += 3;
-    if ((data['peso']?['peso_kg']) != null && data['peso']?['peso_kg'] != 0) score += 2;
-    if ((data['color']?['color_principal'] ?? '').toString().isNotEmpty && data['color']?['color_principal'] != '-') score += 2;
-    if ((data['estado_corporal']?['estado'] ?? '').toString().isNotEmpty && data['estado_corporal']?['estado'] != '-') score += 2;
-    if ((data['gesto']?['nombre'] ?? '').toString().isNotEmpty && data['gesto']?['nombre'] != '-') score += 1;
-    if ((data['orejas']?['posicion'] ?? '').toString().isNotEmpty && data['orejas']?['posicion'] != '-') score += 1;
-    if ((data['imagen_anotada'] ?? '').toString().isNotEmpty) score += 1;
+    if (normalized['mascota_detectada'] == true) {
+      score += 4;
+    } else {
+      return -50; // descarta frames sin mascota
+    }
+    if ((normalized['raza']?['raza'] ?? '').toString().isNotEmpty && normalized['raza']?['raza'] != '-') score += 3;
+    if ((normalized['peso']?['peso_kg']) != null && normalized['peso']?['peso_kg'] != 0) score += 2;
+    if ((normalized['color']?['color_principal'] ?? '').toString().isNotEmpty && normalized['color']?['color_principal'] != '-') score += 2;
+    if ((normalized['estado_corporal']?['estado'] ?? '').toString().isNotEmpty && normalized['estado_corporal']?['estado'] != '-') score += 2;
+    if ((normalized['gesto']?['nombre'] ?? '').toString().isNotEmpty && normalized['gesto']?['nombre'] != '-') score += 1;
+    if ((normalized['orejas']?['posicion'] ?? '').toString().isNotEmpty && normalized['orejas']?['posicion'] != '-') score += 1;
+    if ((normalized['imagen_anotada'] ?? '').toString().isNotEmpty) score += 1;
     return score;
   }
 
@@ -3462,6 +3496,30 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     final candidateScore = _generalResultScore(candidate);
     final currentScore   = _generalResultScore(current);
     return candidateScore >= currentScore;
+  }
+
+  Map<String, dynamic>? _decodeGeneralJson(String body) {
+    try {
+      return json.decode(body) as Map<String, dynamic>;
+    } catch (_) {
+      final start = body.indexOf('{');
+      final end   = body.lastIndexOf('}');
+      if (start != -1 && end != -1 && end > start) {
+        final slice = body.substring(start, end + 1);
+        try { return json.decode(slice) as Map<String, dynamic>; } catch (_) {}
+      }
+      final cleaned = body
+        .replaceAll(RegExp(r",\s*}"), "}")
+        .replaceAll(RegExp(r",\s*]"), "]")
+        .trim();
+      try { return json.decode(cleaned) as Map<String, dynamic>; } catch (_) {}
+    }
+    return null;
+  }
+
+  String _truncate(String text, [int max = 400]) {
+    if (text.length <= max) return text;
+    return text.substring(0, max) + '...';
   }
 
   static String _normalizeTipo(String endpoint) {
@@ -3476,21 +3534,97 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     // Registrar timestamp para el rate limit
     _lastScanFinished = DateTime.now();
     setState(() => _scanning = false);
-    if (_last != null) {
-      final record = ScanRecord(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        catId: widget.cat.id, date: DateTime.now(),
-        resultado: {..._last!, 'tipo': 'general'});
-      widget.user.scans.add(record);
-      await StorageService.saveScans(widget.user.scans);
-      await FirestoreService.saveEscaneos(widget.user.scans);
-      widget.onComplete();
-      Navigator.of(context).pushReplacement(MaterialPageRoute(
-        builder: (_) => ResultScreen(
-          record: record, cat: widget.cat,
-          user: widget.user, serverIp: widget.serverIp,
-          cameras: widget.cameras)));
+    debugPrint("_finish called. bestValid=${_bestValid == null ? 'null' : 'present'} last=${_last == null ? 'null' : 'present'}");
+    if (_bestValid != null) {
+      _goToResults(_bestValid!);
+    } else {
+      if (_sending) {
+        final startedWaiting = DateTime.now();
+        while (mounted &&
+            _sending &&
+            DateTime.now().difference(startedWaiting) < const Duration(seconds: 12)) {
+          await Future.delayed(const Duration(milliseconds: 250));
+          if (_bestValid != null) {
+            _goToResults(_bestValid!);
+            return;
+          }
+        }
+        if (!mounted) return;
+        if (_bestValid != null) {
+          _goToResults(_bestValid!);
+          return;
+        }
+      }
+      debugPrint("_finish no result; showing snackbar");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(L.lang == 'en'
+            ? 'We could not get a valid analysis. Try again moving closer.'
+            : 'No se pudo obtener un análisis válido. Intenta de nuevo acercando la cámara.'),
+          duration: const Duration(seconds: 3),
+        ));
+      }
     }
+  }
+
+  void _goToResults(Map<String, dynamic> data) async {
+    if (_navigating || !mounted) return;
+    _navigating = true;
+    _scanTimer?.cancel(); _cdTimer?.cancel();
+    setState(() => _scanning = false);
+
+    final normalizado = _normalizeGeneralPayload(data);
+    debugPrint("Navigating with result: ${jsonEncode(normalizado)}");
+
+    final record = ScanRecord(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      catId: widget.cat.id, date: DateTime.now(),
+      resultado: normalizado);
+    widget.user.scans.add(record);
+    await StorageService.saveScans(widget.user.scans);
+    await FirestoreService.saveEscaneos(widget.user.scans);
+    widget.onComplete();
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(MaterialPageRoute(
+      builder: (_) => ResultScreen(
+        record: record, cat: widget.cat,
+        user: widget.user, serverIp: widget.serverIp,
+        cameras: widget.cameras)));
+  }
+
+  Map<String, dynamic> _normalizeGeneralPayload(Map<String, dynamic> data) {
+    final raza = data['raza'] as Map? ?? const {};
+    final peso = data['peso'] as Map? ?? const {};
+    final color = data['color'] as Map? ?? const {};
+
+    return {
+      ...data,
+      'tipo': data['tipo'] ?? 'general',
+      'raza': {
+        ...raza,
+        'raza': raza['raza'] ?? raza['nombre'] ?? '-',
+        'confianza': raza['confianza'] ?? 0,
+        'descripcion': raza['descripcion'] ?? '',
+      },
+      'peso': {
+        ...peso,
+        'peso_kg': peso['peso_kg'] ?? peso['estimado_kg'] ?? '-',
+        'peso_lb': peso['peso_lb'] ?? peso['estimado_lb'] ?? '-',
+        'rango': peso['rango'] ?? '${peso['rango_min_kg'] ?? ''} - ${peso['rango_max_kg'] ?? ''} kg',
+        'confianza': peso['confianza'] ?? '-',
+      },
+      'color': {
+        ...color,
+        'color_principal': color['color_principal'] ?? '-',
+        'patron': color['patron'] ?? '-',
+        'hex': color['hex'] ?? color['hex_aproximado'] ?? '#888888',
+      },
+      'estado_corporal': data['estado_corporal'] ?? {},
+      'orejas': data['orejas'] ?? {},
+      'gesto': data['gesto'] ?? {},
+      'cola': data['cola'] ?? {},
+      'salud_visual': data['salud_visual'] ?? {},
+    };
   }
 
   @override
@@ -3512,6 +3646,10 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
           _scanBanner(),
           const Spacer(),
           _overlay(),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: _statusBadge(),
+          ),
           const SizedBox(height: 24),
           _controls(),
           const SizedBox(height: 48),
@@ -3633,6 +3771,24 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         ),
       ),
     ]);
+  }
+
+  Widget _statusBadge() {
+    final ready = _last != null;
+    final txt   = ready
+      ? (L.lang == 'en' ? 'Result ready – tap Stop to view' : 'Resultado listo · toca Detener para ver')
+      : (L.lang == 'en' ? 'Waiting for AI response...' : 'Esperando respuesta de la IA...');
+    final color = ready ? kGreen : Colors.white24;
+    final textC = ready ? Colors.black87 : Colors.white70;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ready ? kGreen : Colors.white24)),
+      child: Text(txt, style: _nunito(12, textC, weight: FontWeight.w700)),
+    );
   }
 
   Widget _controls() => Row(

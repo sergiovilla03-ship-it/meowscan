@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Archivos internos de la app (PDFs, reportes generados) -->
+    <files-path name="internal_files" path="."/>
+
+    <!-- Caché interna (fotos temporales de cámara) -->
+    <cache-path name="internal_cache" path="."/>
+
+    <!-- Almacenamiento externo (fotos guardadas) -->
+    <external-path name="external_files" path="."/>
+
+    <!-- Caché externa -->
+    <external-cache-path name="external_cache" path="."/>
+
+    <!-- Archivos en external files dir (Android 10+) -->
+    <external-files-path name="external_files_dir" path="."/>
+</paths>

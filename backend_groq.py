@@ -775,7 +775,7 @@ class MotorGroq:
             prompt_base = PROMPT_EN if lang == "en" else PROMPT_ES
             idioma_line = "Respond ONLY in English." if lang == "en" else "Responde SOLO en español."
             prompt = f"{prompt_base}\\n{idioma_line}"
-            return self._llamar_gemini(img_b64, prompt)
+            return self._llamar_gemini(img_b64, prompt, max_tokens=3000)
         except json.JSONDecodeError as e:
             print(f"⚠️ JSON parse error: {e}")
             return self._resultado_fallback(lang=lang)
