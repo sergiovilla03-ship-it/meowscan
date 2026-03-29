@@ -36,7 +36,8 @@ import time
 
 # ── Configuración ─────────────────────────────────────────────
 HOST      = "0.0.0.0"
-PORT      = 8000
+# Render asigna el puerto en la env var PORT; si no existe, usamos 8000 local
+PORT      = int(os.environ.get("PORT", "8000"))
 GROQ_API_KEY   = os.environ.get("GROQ_API_KEY", "")
 groq_client    = Groq(api_key=GROQ_API_KEY)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
