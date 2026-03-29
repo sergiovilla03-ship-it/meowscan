@@ -1014,6 +1014,22 @@ class MotorGroq:
         orejas     = resultado.get("orejas", {})
         salud_vis  = resultado.get("salud_visual", {})
 
+        # Normalizar si vinieron como strings sueltas por parse parcial
+        if isinstance(raza_info, str):
+            raza_info = {"nombre": raza_info, "confianza": 0, "descripcion": ""}
+        if isinstance(peso_info, str):
+            peso_info = {"estimado_kg": 0, "estimado_lb": 0, "rango_min_kg": 0, "rango_max_kg": 0, "confianza": "Media"}
+        if isinstance(color_info, str):
+            color_info = {"color_principal": color_info, "colores_secundarios": [], "patron": "-", "hex_aproximado": "#888888"}
+        if isinstance(corp_info, str):
+            corp_info = {"bcs": 5, "estado": corp_info, "emoji": "🐱", "color_hex": "#52C97A", "salud_pct": 75, "consejo": "", "alerta_peso": False, "mensaje_alerta": None}
+        if isinstance(gesto_info, str):
+            gesto_info = {"nombre": gesto_info, "emocion": gesto_info, "descripcion": gesto_info, "nivel_estres": 0, "cola_posicion": None}
+        if isinstance(orejas, str):
+            orejas = {"posicion": orejas, "estado": orejas, "significado": orejas, "alerta": False, "alerta_veterinario": False, "mensaje_veterinario": None}
+        if isinstance(salud_vis, str):
+            salud_vis = {"ojos": salud_vis, "pelaje": salud_vis, "observaciones": salud_vis}
+
         # Validar que tenemos datos completos
         if not isinstance(raza_info, dict) or not raza_info:
             print("⚠️ BACKEND: raza_info vacía, usando fallback")
