@@ -648,11 +648,47 @@ class MotorGroq:
                 if p.startswith("{"):
                     texto = p
                     break
-        # Extract from first { to last }
+        # Extract JSON-looking slice (from first { )
         start = texto.find("{")
-        end   = texto.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            texto = texto[start:end+1]
+        if start != -1:
+            texto = texto[start:]
+
+        # Intenta encontrar el Ãºltimo punto donde las llaves estÃ¡n balanceadas
+        def _ultimo_json_balanceado(s: str) -> Optional[str]:
+            depth = 0
+            in_str = False
+            esc = False
+            last_ok = None
+            for i, ch in enumerate(s):
+                if esc:
+                    esc = False
+                    continue
+                if ch == "\\":
+                    esc = True if in_str else False
+                    continue
+                if ch == '"':
+                    in_str = not in_str
+                    continue
+                if in_str:
+                    continue
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        last_ok = i
+            if last_ok is not None:
+                return s[:last_ok+1]
+            return None
+
+        balanceado = _ultimo_json_balanceado(texto)
+        if balanceado:
+            texto = balanceado
+        else:
+            # Si nunca se balanceÃ³, tomamos hasta la Ãºltima llave que aparezca
+            end = texto.rfind("}")
+            if end != -1:
+                texto = texto[:end+1]
         # Fix Python literals
         texto = texto.replace(": True",  ": true")
         texto = texto.replace(": False", ": false")
@@ -664,7 +700,10 @@ class MotorGroq:
         texto = _completar_json_truncado(texto)
         # First try: direct parse
         try:
-            return json.loads(texto)
+            parsed = json.loads(texto)
+            if isinstance(parsed, dict) and len(parsed.keys()) == 0:
+                raise ValueError("JSON parsed empty dict")
+            return parsed
         except Exception as e:
             print(f"❌ JSON parse failed: {e}\nTexto: {texto[:300]}")
 
@@ -694,7 +733,10 @@ class MotorGroq:
         texto_limpio = _podar_fragmentos_incompletos(texto_limpio)
         texto_limpio = _completar_json_truncado(texto_limpio)
         try:
-            return json.loads(texto_limpio)
+            parsed = json.loads(texto_limpio)
+            if isinstance(parsed, dict) and len(parsed.keys()) == 0:
+                raise ValueError("JSON parsed empty dict (clean)")
+            return parsed
         except Exception as e2:
             print(f"❌ JSON parse failed after cleanup: {e2}\nTexto limpio: {texto_limpio[:300]}")
 
