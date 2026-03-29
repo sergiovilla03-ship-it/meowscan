@@ -818,10 +818,13 @@ class MotorGroq:
 
             # Intentar recuperar objetos completos desde el texto original
             for clave_obj in ["raza", "peso", "color", "estado_corporal", "orejas", "gesto", "salud_visual"]:
+                obj = None
                 if clave_obj in resultado and not isinstance(resultado.get(clave_obj), dict):
                     obj = _extract_object_for(clave_obj, original_text)
-                    if obj:
-                        resultado[clave_obj] = obj
+                elif clave_obj not in resultado:
+                    obj = _extract_object_for(clave_obj, original_text)
+                if obj:
+                    resultado[clave_obj] = obj
 
             if (("raza" not in resultado) or not isinstance(resultado.get("raza"), dict)) and any(k in resultado for k in ["nombre", "confianza", "descripcion"]):
                 datos = _pop_many(["nombre", "confianza", "descripcion"])
