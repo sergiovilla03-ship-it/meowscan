@@ -772,14 +772,14 @@ class MotorGroq:
                         out[kk] = resultado.pop(kk)
                 return out
 
-            if "raza" not in resultado and any(k in resultado for k in ["nombre", "confianza", "descripcion"]):
+            if (("raza" not in resultado) or not isinstance(resultado.get("raza"), dict)) and any(k in resultado for k in ["nombre", "confianza", "descripcion"]):
                 datos = _pop_many(["nombre", "confianza", "descripcion"])
                 resultado["raza"] = {
                     "nombre": datos.get("nombre", "-"),
                     "confianza": datos.get("confianza", 0),
                     "descripcion": datos.get("descripcion", "")
                 }
-            if "peso" not in resultado and any(k in resultado for k in ["estimado_kg", "estimado_lb", "rango_min_kg", "rango_max_kg"]):
+            if (("peso" not in resultado) or not isinstance(resultado.get("peso"), dict)) and any(k in resultado for k in ["estimado_kg", "estimado_lb", "rango_min_kg", "rango_max_kg"]):
                 datos = _pop_many(["estimado_kg", "estimado_lb", "rango_min_kg", "rango_max_kg", "confianza"])
                 resultado["peso"] = {
                     "estimado_kg": datos.get("estimado_kg", 0),
@@ -788,7 +788,7 @@ class MotorGroq:
                     "rango_max_kg": datos.get("rango_max_kg", 0),
                     "confianza": datos.get("confianza", "Media"),
                 }
-            if "color" not in resultado and any(k in resultado for k in ["color_principal", "colores_secundarios", "patron", "hex_aproximado"]):
+            if (("color" not in resultado) or not isinstance(resultado.get("color"), dict)) and any(k in resultado for k in ["color_principal", "colores_secundarios", "patron", "hex_aproximado"]):
                 datos = _pop_many(["color_principal", "colores_secundarios", "patron", "hex_aproximado"])
                 resultado["color"] = {
                     "color_principal": datos.get("color_principal", "-"),
@@ -796,7 +796,7 @@ class MotorGroq:
                     "patron": datos.get("patron", "-"),
                     "hex_aproximado": datos.get("hex_aproximado", "#888888"),
                 }
-            if "estado_corporal" not in resultado and any(k in resultado for k in ["bcs", "estado", "emoji", "color_hex", "salud_pct"]):
+            if (("estado_corporal" not in resultado) or not isinstance(resultado.get("estado_corporal"), dict)) and any(k in resultado for k in ["bcs", "estado", "emoji", "color_hex", "salud_pct"]):
                 datos = _pop_many(["bcs", "estado", "emoji", "color_hex", "salud_pct", "consejo", "alerta_peso", "mensaje_alerta"])
                 resultado["estado_corporal"] = {
                     "bcs": datos.get("bcs", 5),
@@ -808,7 +808,7 @@ class MotorGroq:
                     "alerta_peso": datos.get("alerta_peso", False),
                     "mensaje_alerta": datos.get("mensaje_alerta"),
                 }
-            if "orejas" not in resultado and any(k in resultado for k in ["posicion", "estado", "significado", "alerta", "alerta_veterinario"]):
+            if (("orejas" not in resultado) or not isinstance(resultado.get("orejas"), dict)) and any(k in resultado for k in ["posicion", "estado", "significado", "alerta", "alerta_veterinario"]):
                 datos = _pop_many(["posicion", "estado", "significado", "alerta", "alerta_veterinario", "mensaje_veterinario"])
                 resultado["orejas"] = {
                     "posicion": datos.get("posicion", "-"),
@@ -818,7 +818,7 @@ class MotorGroq:
                     "alerta_veterinario": datos.get("alerta_veterinario", False),
                     "mensaje_veterinario": datos.get("mensaje_veterinario"),
                 }
-            if "gesto" not in resultado and any(k in resultado for k in ["visible", "emocion", "nivel_estres", "cola_posicion"]):
+            if (("gesto" not in resultado) or not isinstance(resultado.get("gesto"), dict)) and any(k in resultado for k in ["visible", "emocion", "nivel_estres", "cola_posicion"]):
                 datos = _pop_many(["visible", "emocion", "nivel_estres", "cola_posicion"])
                 resultado["gesto"] = {
                     "visible": datos.get("visible", False),
@@ -826,7 +826,7 @@ class MotorGroq:
                     "nivel_estres": datos.get("nivel_estres", 0),
                     "cola_posicion": datos.get("cola_posicion"),
                 }
-            if "salud_visual" not in resultado and any(k in resultado for k in ["ojos", "pelaje", "observaciones"]):
+            if (("salud_visual" not in resultado) or not isinstance(resultado.get("salud_visual"), dict)) and any(k in resultado for k in ["ojos", "pelaje", "observaciones"]):
                 datos = _pop_many(["ojos", "pelaje", "observaciones"])
                 resultado["salud_visual"] = {
                     "ojos": datos.get("ojos", "-"),
