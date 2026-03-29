@@ -885,6 +885,11 @@ class MotorGroq:
                     "observaciones": datos.get("observaciones", ""),
                 }
 
+            # Si aÃºn quedan strings en lugar de objetos, elimÃ­nalos para usar fallback mÃ¡s adelante
+            for clave_obj in ["raza", "peso", "color", "estado_corporal", "orejas", "gesto", "salud_visual"]:
+                if clave_obj in resultado and isinstance(resultado.get(clave_obj), str):
+                    resultado.pop(clave_obj, None)
+
             print(f"⚠️ JSON recuperado parcialmente con regex: {list(resultado.keys())}")
             return resultado
 
@@ -929,7 +934,7 @@ class MotorGroq:
                     normalizado[clave] = valor
         return normalizado
 
-    def _llamar_gemini(self, img_b64: str, prompt: str, max_tokens: int = 2000) -> dict:
+    def _llamar_gemini(self, img_b64: str, prompt: str, max_tokens: int = 4000) -> dict:
         """Llama a Groq Vision (llama-4-scout) con la imagen."""
         try:
             response = groq_client.chat.completions.create(
