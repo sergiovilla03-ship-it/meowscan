@@ -763,6 +763,76 @@ class MotorGroq:
             except:
                 resultado[k] = v.strip('"')
         if resultado:
+            # Reconstruir estructura anidada esperada si solo obtuvimos pares sueltos
+            def _pop_many(keys):
+                out = {}
+                for kk in keys:
+                    if kk in resultado:
+                        out[kk] = resultado.pop(kk)
+                return out
+
+            if "raza" not in resultado and any(k in resultado for k in ["nombre", "confianza", "descripcion"]):
+                datos = _pop_many(["nombre", "confianza", "descripcion"])
+                resultado["raza"] = {
+                    "nombre": datos.get("nombre", "-"),
+                    "confianza": datos.get("confianza", 0),
+                    "descripcion": datos.get("descripcion", "")
+                }
+            if "peso" not in resultado and any(k in resultado for k in ["estimado_kg", "estimado_lb", "rango_min_kg", "rango_max_kg"]):
+                datos = _pop_many(["estimado_kg", "estimado_lb", "rango_min_kg", "rango_max_kg", "confianza"])
+                resultado["peso"] = {
+                    "estimado_kg": datos.get("estimado_kg", 0),
+                    "estimado_lb": datos.get("estimado_lb", 0),
+                    "rango_min_kg": datos.get("rango_min_kg", 0),
+                    "rango_max_kg": datos.get("rango_max_kg", 0),
+                    "confianza": datos.get("confianza", "Media"),
+                }
+            if "color" not in resultado and any(k in resultado for k in ["color_principal", "colores_secundarios", "patron", "hex_aproximado"]):
+                datos = _pop_many(["color_principal", "colores_secundarios", "patron", "hex_aproximado"])
+                resultado["color"] = {
+                    "color_principal": datos.get("color_principal", "-"),
+                    "colores_secundarios": datos.get("colores_secundarios", []),
+                    "patron": datos.get("patron", "-"),
+                    "hex_aproximado": datos.get("hex_aproximado", "#888888"),
+                }
+            if "estado_corporal" not in resultado and any(k in resultado for k in ["bcs", "estado", "emoji", "color_hex", "salud_pct"]):
+                datos = _pop_many(["bcs", "estado", "emoji", "color_hex", "salud_pct", "consejo", "alerta_peso", "mensaje_alerta"])
+                resultado["estado_corporal"] = {
+                    "bcs": datos.get("bcs", 5),
+                    "estado": datos.get("estado", "-"),
+                    "emoji": datos.get("emoji", "🐱"),
+                    "color_hex": datos.get("color_hex", "#52C97A"),
+                    "salud_pct": datos.get("salud_pct", 75),
+                    "consejo": datos.get("consejo", ""),
+                    "alerta_peso": datos.get("alerta_peso", False),
+                    "mensaje_alerta": datos.get("mensaje_alerta"),
+                }
+            if "orejas" not in resultado and any(k in resultado for k in ["posicion", "estado", "significado", "alerta", "alerta_veterinario"]):
+                datos = _pop_many(["posicion", "estado", "significado", "alerta", "alerta_veterinario", "mensaje_veterinario"])
+                resultado["orejas"] = {
+                    "posicion": datos.get("posicion", "-"),
+                    "estado": datos.get("estado", "-"),
+                    "significado": datos.get("significado", ""),
+                    "alerta": datos.get("alerta", False),
+                    "alerta_veterinario": datos.get("alerta_veterinario", False),
+                    "mensaje_veterinario": datos.get("mensaje_veterinario"),
+                }
+            if "gesto" not in resultado and any(k in resultado for k in ["visible", "emocion", "nivel_estres", "cola_posicion"]):
+                datos = _pop_many(["visible", "emocion", "nivel_estres", "cola_posicion"])
+                resultado["gesto"] = {
+                    "visible": datos.get("visible", False),
+                    "emocion": datos.get("emocion", ""),
+                    "nivel_estres": datos.get("nivel_estres", 0),
+                    "cola_posicion": datos.get("cola_posicion"),
+                }
+            if "salud_visual" not in resultado and any(k in resultado for k in ["ojos", "pelaje", "observaciones"]):
+                datos = _pop_many(["ojos", "pelaje", "observaciones"])
+                resultado["salud_visual"] = {
+                    "ojos": datos.get("ojos", "-"),
+                    "pelaje": datos.get("pelaje", "-"),
+                    "observaciones": datos.get("observaciones", ""),
+                }
+
             print(f"⚠️ JSON recuperado parcialmente con regex: {list(resultado.keys())}")
             return resultado
 
