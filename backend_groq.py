@@ -637,6 +637,7 @@ class MotorGroq:
 
             return texto_podado
 
+        original_text = texto
         texto = texto.strip()
         # Strip markdown fences
         if "```json" in texto:
@@ -740,9 +741,22 @@ class MotorGroq:
         except Exception as e2:
             print(f"❌ JSON parse failed after cleanup: {e2}\nTexto limpio: {texto_limpio[:300]}")
 
-        # Third try: use regex to extract each key-value pair
+        # Third try: intentar de nuevo con el original recortado y balanceado
+        try:
+            orig_slice = original_text[original_text.find("{"):] if "{" in original_text else original_text
+            orig_slice = _podar_fragmentos_incompletos(orig_slice)
+            orig_slice = _completar_json_truncado(orig_slice)
+            parsed = json.loads(orig_slice)
+            if isinstance(parsed, dict) and len(parsed.keys()) == 0:
+                raise ValueError("JSON parsed empty dict (orig)")
+            return parsed
+        except Exception as e3:
+            print(f"❌ JSON parse failed on original slice: {e3}\nOrig slice: {original_text[:300]}")
+
+        # Fourth try: use regex to extract each key-value pair (using the largest candidate)
         resultado = {}
-        patron_kv = re.findall(r'"([^"]+)"\s*:\s*("(?:[^"\\]|\\.)*"|\[.*?\]|true|false|null|-?\d+\.?\d*)', texto, re.DOTALL)
+        candidate_text = texto if len(texto) > 20 else original_text
+        patron_kv = re.findall(r'"([^"]+)"\s*:\s*("(?:[^"\\]|\\.)*"|\[.*?\]|true|false|null|-?\d+\.?\d*)', candidate_text, re.DOTALL)
         for k, v in patron_kv:
             try:
                 resultado[k] = json.loads(v)
