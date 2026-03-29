@@ -763,6 +763,50 @@ class MotorGroq:
                 resultado[k] = json.loads(v)
             except:
                 resultado[k] = v.strip('"')
+        def _extract_object_for(clave: str, fuente: str) -> Optional[dict]:
+            """Extrae el objeto JSON balanceado para una clave dada dentro de texto fuente."""
+            idx = fuente.find(f'"{clave}"')
+            if idx == -1:
+                return None
+            sub = fuente[idx:]
+            colon = sub.find(":")
+            if colon == -1:
+                return None
+            sub = sub[colon+1:].lstrip()
+            if not sub.startswith("{"):
+                return None
+            # scan balance
+            depth = 0
+            in_str = False
+            esc = False
+            end_idx = None
+            for i, ch in enumerate(sub):
+                if esc:
+                    esc = False
+                    continue
+                if ch == "\\":
+                    esc = True if in_str else False
+                    continue
+                if ch == '"':
+                    in_str = not in_str
+                if in_str:
+                    continue
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        end_idx = i
+                        break
+            if end_idx is None:
+                return None
+            fragment = sub[:end_idx+1]
+            try:
+                parsed = json.loads(fragment)
+                return parsed if isinstance(parsed, dict) else None
+            except:
+                return None
+
         if resultado:
             # Reconstruir estructura anidada esperada si solo obtuvimos pares sueltos
             def _pop_many(keys):
@@ -771,6 +815,13 @@ class MotorGroq:
                     if kk in resultado:
                         out[kk] = resultado.pop(kk)
                 return out
+
+            # Intentar recuperar objetos completos desde el texto original
+            for clave_obj in ["raza", "peso", "color", "estado_corporal", "orejas", "gesto", "salud_visual"]:
+                if clave_obj in resultado and not isinstance(resultado.get(clave_obj), dict):
+                    obj = _extract_object_for(clave_obj, original_text)
+                    if obj:
+                        resultado[clave_obj] = obj
 
             if (("raza" not in resultado) or not isinstance(resultado.get("raza"), dict)) and any(k in resultado for k in ["nombre", "confianza", "descripcion"]):
                 datos = _pop_many(["nombre", "confianza", "descripcion"])
