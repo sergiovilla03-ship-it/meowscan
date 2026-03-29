@@ -753,21 +753,28 @@ class MotorGroq:
 
     def _llamar_gemini(self, img_b64: str, prompt: str, max_tokens: int = 2000) -> dict:
         """Llama a Groq Vision (llama-4-scout) con la imagen."""
-        response = groq_client.chat.completions.create(
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
-                    {"type": "text", "text": prompt}
-                ]
-            }],
-            max_tokens=max_tokens,
-            temperature=0.1,
-        )
-        texto = response.choices[0].message.content.strip()
-        print(f"📝 Groq raw response (first 300): {texto[:300]}")
-        return self._extraer_json(texto)
+        try:
+            response = groq_client.chat.completions.create(
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
+                        {"type": "text", "text": prompt}
+                    ]
+                }],
+                max_tokens=max_tokens,
+                temperature=0.1,
+            )
+            texto = response.choices[0].message.content.strip()
+            print(f"📝 Groq raw response (first 300): {texto[:300]}")
+            print(f"📝 Groq raw response (FULL LENGTH): {len(texto)} chars")
+            resultado = self._extraer_json(texto)
+            print(f"✅ Groq JSON PARSED: {list(resultado.keys()) if isinstance(resultado, dict) else 'NOT A DICT'}")
+            return resultado
+        except Exception as e:
+            print(f"❌ ERROR EN _llamar_gemini: {e}")
+            raise
 
     def analizar_con_groq(self, img_bgr: np.ndarray, lang: str = "es") -> Dict[str, Any]:
         img_b64 = self._img_to_b64(img_bgr)
@@ -856,6 +863,9 @@ class MotorGroq:
 
         caras     = self.detectar_cara(img)
         resultado = self.analizar_con_groq(img, lang=lang)
+        
+        print(f"✅ BACKEND: resultado recibido de Groq: {list(resultado.keys())}")
+        print(f"   mascota_detectada: {resultado.get('mascota_detectada')}")
 
         if not resultado.get("mascota_detectada", False):
             return {
@@ -878,7 +888,15 @@ class MotorGroq:
         orejas     = resultado.get("orejas", {})
         salud_vis  = resultado.get("salud_visual", {})
 
-        return {
+        # Validar que tenemos datos completos
+        if not isinstance(raza_info, dict) or not raza_info:
+            print("⚠️ BACKEND: raza_info vacía, usando fallback")
+            raza_info = {"nombre": "-", "confianza": 0, "descripcion": ""}
+        if not isinstance(peso_info, dict) or not peso_info:
+            print("⚠️ BACKEND: peso_info vacía, usando fallback")
+            peso_info = {"estimado_kg": 0, "estimado_lb": 0, "rango_min_kg": 0, "rango_max_kg": 0, "confianza": "-"}
+
+        respuesta_final = {
             "gato_detectado":    True,
             "mascota_detectada": True,
             "tipo":              resultado.get("tipo", "gato"),
@@ -887,23 +905,29 @@ class MotorGroq:
             "imagen_anotada":    img_b64,
 
             "raza": {
-                "raza":        raza_info.get("nombre", "-"),
+                "nombre":      raza_info.get("nombre", "-"),
+                "raza":        raza_info.get("nombre", "-"),  # Copia para compatibilidad Dart
                 "confianza":   raza_info.get("confianza", 0),
                 "descripcion": raza_info.get("descripcion", ""),
                 "peso_base":   peso_info.get("estimado_kg", 4.5),
             },
             "peso": {
-                "peso_kg":       peso_info.get("estimado_kg", 0),
-                "peso_lb":       peso_info.get("estimado_lb", 0),
-                "rango":         f'{peso_info.get("rango_min_kg",0)}-{peso_info.get("rango_max_kg",0)} kg',
+                "estimado_kg":  peso_info.get("estimado_kg", 0),
+                "peso_kg":      peso_info.get("estimado_kg", 0),  # Copia para compatibilidad Dart
+                "estimado_lb":  peso_info.get("estimado_lb", 0),
+                "peso_lb":      peso_info.get("estimado_lb", 0),  # Copia para compatibilidad Dart
+                "rango":        f'{peso_info.get("rango_min_kg", 0)}-{peso_info.get("rango_max_kg", 0)} kg',
+                "rango_min_kg": peso_info.get("rango_min_kg", 0),
+                "rango_max_kg": peso_info.get("rango_max_kg", 0),
                 "area_relativa": 0,
-                "confianza":     peso_info.get("confianza", "Media"),
+                "confianza":    peso_info.get("confianza", "Media"),
             },
             "color": {
                 "color_principal":     color_info.get("color_principal", "-"),
                 "colores_secundarios": color_info.get("colores_secundarios", []),
                 "patron":              color_info.get("patron", "-"),
                 "hex":                 color_info.get("hex_aproximado", "#888888"),
+                "hex_aproximado":      color_info.get("hex_aproximado", "#888888"),  # Copia para compatibilidad
             },
             "estado_corporal": {
                 "bcs":            corp_info.get("bcs", 5),
@@ -931,11 +955,11 @@ class MotorGroq:
                 "significado":        orejas.get("significado", "-"),
                 "alerta":             orejas.get("alerta", False),
                 "alerta_veterinario": orejas.get("alerta_veterinario", False),
-                "mensaje_veterinario":orejas.get("mensaje_veterinario", None),
+                "mensaje_veterinario": orejas.get("mensaje_veterinario", None),
             },
             "cola": {
                 "posicion":   resultado.get("cola", {}).get("posicion", "No visible"),
-                "significado":resultado.get("cola", {}).get("significado", "-"),
+                "significado": resultado.get("cola", {}).get("significado", "-"),
                 "visible":    resultado.get("cola", {}).get("visible", False),
             },
             "salud_visual": {
@@ -944,6 +968,9 @@ class MotorGroq:
                 "observaciones": salud_vis.get("observaciones", "-"),
             },
         }
+        
+        print(f"✅ BACKEND RETORNA: mascota_detectada={respuesta_final['mascota_detectada']}, tipo={respuesta_final['tipo']}, raza={respuesta_final['raza']['nombre']}")
+        return respuesta_final
 
     # ── Analizar encías ──────────────────────────────────────
     def analizar_encias_con_groq(self, img_bgr, lang: str = "es") -> Dict[str, Any]:

@@ -3438,25 +3438,28 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
       final res = await http.Response.fromStream(s);
       if (res.statusCode == 200 && mounted) {
         final responseText = utf8.decode(res.bodyBytes, allowMalformed: true);
+        debugPrint("📥 DART: Respuesta del servidor (${responseText.length} chars)");
+        debugPrint("📥 DART: Primeros 400 chars: ${_truncate(responseText, 400)}");
         final data = _decodeGeneralJson(responseText);
         if (data != null) {
           final normalized = _normalizeGeneralPayload(data);
-          debugPrint("General scan parsed OK (${responseText.length} chars)");
-          debugPrint("Resp snippet: ${_truncate(responseText, 300)}");
-          debugPrint("Normalized mascota_detectada=${normalized['mascota_detectada']}, score=${_generalResultScore(normalized)}");
+          debugPrint("✅ DART: JSON parseado y normalizado correctamente");
+          debugPrint("✅ DART: mascota_detectada=${normalized['mascota_detectada']}, raza=${normalized['raza']?['raza']}");
           setState(() {
             if (_shouldKeepGeneralResult(normalized, _bestValid)) {
               _bestValid = normalized;
-              debugPrint("General scan kept valid: ${jsonEncode(_bestValid)}");
+              debugPrint("✅ DART: Resultado válido guardado como mejor resultado");
             }
             _frames++;
             _jsonWarned = false;
+            _last = normalized; // conservar siempre el último frame recibido
           });
           if (_bestValid != null && !_navigating) {
+            debugPrint("🚀 DART: Navegando a ResultScreen con datos válidos");
             _goToResults(_bestValid!);
           }
         } else {
-          debugPrint("❌ JSON PARSE FAILED IN GENERAL SCAN!");
+          debugPrint("❌ DART: JSON PARSE FAILED IN GENERAL SCAN!");
           debugPrint("Raw response length: ${responseText.length} chars");
           debugPrint("First 500 chars: ${_truncate(responseText, 500)}");
           debugPrint("Last 200 chars: ${responseText.length > 200 ? responseText.substring(responseText.length - 200) : responseText}");
@@ -3566,35 +3569,29 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     _lastScanFinished = DateTime.now();
     setState(() => _scanning = false);
     debugPrint("_finish called. bestValid=${_bestValid == null ? 'null' : 'present'} last=${_last == null ? 'null' : 'present'}");
-    if (_bestValid != null) {
-      _goToResults(_bestValid!);
-    } else {
-      if (_sending) {
-        final startedWaiting = DateTime.now();
-        while (mounted &&
-            _sending &&
-            DateTime.now().difference(startedWaiting) < const Duration(seconds: 12)) {
-          await Future.delayed(const Duration(milliseconds: 250));
-          if (_bestValid != null) {
-            _goToResults(_bestValid!);
-            return;
-          }
-        }
-        if (!mounted) return;
-        if (_bestValid != null) {
-          _goToResults(_bestValid!);
-          return;
-        }
+    if (_bestValid != null) { _goToResults(_bestValid!); return; }
+    if (_last != null)      { _goToResults(_last!);      return; }
+    if (_sending) {
+      final startedWaiting = DateTime.now();
+      while (mounted &&
+          _sending &&
+          DateTime.now().difference(startedWaiting) < const Duration(seconds: 12)) {
+        await Future.delayed(const Duration(milliseconds: 250));
+        if (_bestValid != null) { _goToResults(_bestValid!); return; }
+        if (_last != null)      { _goToResults(_last!);      return; }
       }
-      debugPrint("_finish no result; showing snackbar");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(L.lang == 'en'
-            ? 'We could not get a valid analysis. Try again moving closer.'
-            : 'No se pudo obtener un análisis válido. Intenta de nuevo acercando la cámara.'),
-          duration: const Duration(seconds: 3),
-        ));
-      }
+      if (!mounted) return;
+      if (_bestValid != null) { _goToResults(_bestValid!); return; }
+      if (_last != null)      { _goToResults(_last!);      return; }
+    }
+    debugPrint("_finish no result; showing snackbar");
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(L.lang == 'en'
+          ? 'We could not get a valid analysis. Try again moving closer.'
+          : 'No se pudo obtener un análisis válido. Intenta de nuevo acercando la cámara.'),
+        duration: const Duration(seconds: 3),
+      ));
     }
   }
 
@@ -3605,7 +3602,8 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     setState(() => _scanning = false);
 
     final normalizado = _normalizeGeneralPayload(data);
-    debugPrint("Navigating with result: ${jsonEncode(normalizado)}");
+    debugPrint("🎯 DART: Navegando con resultado normalizado: ${jsonEncode(normalizado)}");
+    debugPrint("🎯 DART: mascota_detectada=${normalizado['mascota_detectada']}, tipo=${normalizado['tipo']}, raza=${normalizado['raza']['raza']}");
 
     final record = ScanRecord(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -3628,20 +3626,39 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
     final peso = data['peso'] as Map? ?? const {};
     final color = data['color'] as Map? ?? const {};
 
+    // Extraer raza: el backend puede enviar 'nombre' o 'raza'
+    String razaNombre = raza['nombre'] ?? raza['raza'] ?? '-';
+    
+    // Extraer peso: el backend puede enviar 'estimado_kg' o 'peso_kg'
+    final pesoKg = peso['estimado_kg'] ?? peso['peso_kg'] ?? '-';
+    final pesoLb = peso['estimado_lb'] ?? peso['peso_lb'] ?? '-';
+    final rangoMin = peso['rango_min_kg'] ?? 0;
+    final rangoMax = peso['rango_max_kg'] ?? 0;
+    final rangoStr = (rangoMin is num && rangoMax is num && rangoMin > 0 && rangoMax > 0)
+        ? '$rangoMin - $rangoMax kg'
+        : peso['rango'] ?? '';
+
+    debugPrint("🔍 DART NORMALIZE: raza=$razaNombre, pesoKg=$pesoKg, pesoLb=$pesoLb, rango=$rangoStr");
+
     return {
       ...data,
       'tipo': data['tipo'] ?? 'general',
       'raza': {
         ...raza,
-        'raza': raza['raza'] ?? raza['nombre'] ?? '-',
+        'raza': razaNombre,  // Clave crítica para ResultScreen
+        'nombre': razaNombre,
         'confianza': raza['confianza'] ?? 0,
         'descripcion': raza['descripcion'] ?? '',
       },
       'peso': {
         ...peso,
-        'peso_kg': peso['peso_kg'] ?? peso['estimado_kg'] ?? '-',
-        'peso_lb': peso['peso_lb'] ?? peso['estimado_lb'] ?? '-',
-        'rango': peso['rango'] ?? '${peso['rango_min_kg'] ?? ''} - ${peso['rango_max_kg'] ?? ''} kg',
+        'peso_kg': pesoKg,
+        'estimado_kg': pesoKg,
+        'peso_lb': pesoLb,
+        'estimado_lb': pesoLb,
+        'rango': rangoStr,
+        'rango_min_kg': rangoMin,
+        'rango_max_kg': rangoMax,
         'confianza': peso['confianza'] ?? '-',
       },
       'color': {
@@ -3649,6 +3666,7 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
         'color_principal': color['color_principal'] ?? '-',
         'patron': color['patron'] ?? '-',
         'hex': color['hex'] ?? color['hex_aproximado'] ?? '#888888',
+        'hex_aproximado': color['hex_aproximado'] ?? color['hex'] ?? '#888888',
       },
       'estado_corporal': data['estado_corporal'] ?? {},
       'orejas': data['orejas'] ?? {},
