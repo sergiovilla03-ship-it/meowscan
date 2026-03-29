@@ -3456,14 +3456,45 @@ class _ScanScreenState extends State<ScanScreen> with TickerProviderStateMixin {
             _goToResults(_bestValid!);
           }
         } else {
-          debugPrint("General scan: JSON parse failed. Body: ${_truncate(responseText, 400)}");
+          debugPrint("❌ JSON PARSE FAILED IN GENERAL SCAN!");
+          debugPrint("Raw response length: ${responseText.length} chars");
+          debugPrint("First 500 chars: ${_truncate(responseText, 500)}");
+          debugPrint("Last 200 chars: ${responseText.length > 200 ? responseText.substring(responseText.length - 200) : responseText}");
+          try {
+            final jsonStart = responseText.indexOf('{');
+            final jsonEnd   = responseText.lastIndexOf('}');
+            if (jsonStart != -1 && jsonEnd != -1) {
+              debugPrint("⚠️ JSON boundaries found: start=$jsonStart, end=$jsonEnd");
+              final jsonLength = jsonEnd - jsonStart + 1;
+              debugPrint("⚠️ Valid JSON span length: $jsonLength chars");
+            } else {
+              debugPrint("⚠️ No JSON braces found in response!");
+            }
+          } catch (_) {}
           if (!_jsonWarned && mounted) {
             _jsonWarned = true;
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(L.lang == 'en'
-                ? 'We could not read the analysis result. Please try again.'
-                : 'No pudimos leer el resultado del an\u00e1lisis. Intenta de nuevo.'),
-              duration: const Duration(seconds: 3),
+              backgroundColor: kCoral,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              duration: const Duration(seconds: 5),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    L.lang == 'en' ? '❌ Analysis Failed' : '❌ Análisis Fallido',
+                    style: _nunito(13, Colors.white, weight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    L.lang == 'en'
+                      ? 'The server response was incomplete or malformed. Retrying...'
+                      : 'La respuesta del servidor estaba incompleta. Reintentando...',
+                    style: _nunito(12, Colors.white70),
+                  ),
+                ],
+              ),
             ));
           }
         }

@@ -1006,7 +1006,7 @@ class MotorGroq:
             prompt_completo = f"{_pm}\n\nSonidos capturados:\n{descripcion}"
             model = genai.GenerativeModel(
                 "gemini-2.5-flash",
-                generation_config=genai.GenerationConfig(max_output_tokens=2000, temperature=0.2)
+                generation_config=genai.GenerationConfig(max_output_tokens=3500, temperature=0.2)
             )
             response = model.generate_content(prompt_completo)
             texto = response.text.strip()
@@ -1126,7 +1126,7 @@ Analiza TODOS los escaneos, detecta patrones y tendencias entre los diferentes t
         try:
             model = genai.GenerativeModel(
                 "gemini-2.5-flash",
-                generation_config=genai.GenerationConfig(max_output_tokens=2000, temperature=0.1)
+                generation_config=genai.GenerationConfig(max_output_tokens=3500, temperature=0.1)
             )
             response = model.generate_content(prompt_con_datos)
             texto = response.text.strip()
