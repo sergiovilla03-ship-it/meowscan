@@ -491,6 +491,91 @@ Si no se ven las encías claramente: {"mascota_detectada": false}
 Responde SOLO el JSON."""
 
 # ════════════════════════════════════════════════════════════════
+#  PROMPT ANÁLISIS DE ORINA
+# ════════════════════════════════════════════════════════════════
+PROMPT_ORINA_ES = """Eres el Dr. MeowScan, veterinario clínico con 30 años de experiencia especializado en medicina felina y canina, experto en urología veterinaria.
+
+Analiza esta imagen de orina de mascota y determina su color, posibles condiciones y nivel de urgencia.
+
+GUÍA DE COLORES DE ORINA:
+- Amarillo claro / Paja: NORMAL — bien hidratado
+- Amarillo oscuro / Ámbar: Deshidratación leve — aumentar agua
+- Naranja: Deshidratación severa, problemas hepáticos, ictericia
+- Rojo / Rosado: Sangre (hematuria) — CONSULTA URGENTE
+- Marrón / Café oscuro: Daño muscular (mioglobina), problemas renales graves
+- Muy claro / Transparente: Diabetes insípida, enfermedad renal, polidipsia
+- Verde / Azulado: Infección severa por bacterias, biliverdinuria — EMERGENCIA
+- Espumoso / Turbio: Proteinuria, infección urinaria (ITU)
+
+TAMBIÉN EVALÚA:
+- Turbidez (clara, turbia, opaca)
+- Presencia de sedimento visible
+- Espuma excesiva (posible proteinuria)
+- Olor inusual si se describe
+
+Responde ÚNICAMENTE con JSON válido, sin texto adicional:
+{
+  "orina_detectada": true,
+  "color_detectado": "nombre del color observado",
+  "color_hex": "#código hexadecimal representativo",
+  "turbidez": "Clara, Ligeramente turbia, Turbia u Opaca",
+  "espuma": true o false,
+  "sedimento_visible": true o false,
+  "nivel_urgencia": "Normal, Observar, Consulta pronto o Emergencia",
+  "urgencia_color": "#52C97A para normal, #FF9800 para observar, #F44336 para consulta, #8B0000 para emergencia",
+  "alerta_veterinario": true si urgencia NO es Normal,
+  "significado_clinico": "explicación clara de qué indica este color de orina",
+  "posibles_condiciones": ["condición 1", "condición 2", "condición 3"],
+  "en_gatos": "manifestación y riesgos específicos en gatos",
+  "en_perros": "manifestación y riesgos específicos en perros",
+  "recomendacion_inmediata": "qué debe hacer el dueño AHORA MISMO",
+  "cuando_ir_veterinario": "criterios específicos para consultar al vet",
+  "consejo_hidratacion": "consejo sobre agua y dieta según el color detectado",
+  "mensaje_urgencia": "mensaje directo y claro para el dueño"
+}
+
+Si la imagen no muestra orina de mascota claramente: {"orina_detectada": false, "mensaje": "No se detecta orina en la imagen. Asegúrate de tomar la foto sobre una superficie clara o en la bandeja sanitaria."}
+Responde SOLO el JSON."""
+
+PROMPT_ORINA_EN = """You are Dr. MeowScan, a clinical veterinarian with 30 years of experience specializing in feline and canine medicine, expert in veterinary urology.
+
+Analyze this pet urine image and determine its color, possible conditions and urgency level.
+
+URINE COLOR GUIDE:
+- Light yellow / Straw: NORMAL — well hydrated
+- Dark yellow / Amber: Mild dehydration — increase water intake
+- Orange: Severe dehydration, liver problems, jaundice
+- Red / Pink: Blood (hematuria) — URGENT CONSULTATION
+- Brown / Dark coffee: Muscle damage (myoglobin), serious kidney problems
+- Very clear / Transparent: Diabetes insipidus, kidney disease, polydipsia
+- Green / Bluish: Severe bacterial infection, biliverdinuria — EMERGENCY
+- Foamy / Cloudy: Proteinuria, urinary tract infection (UTI)
+
+Respond ONLY with valid JSON, no extra text:
+{
+  "orina_detectada": true,
+  "color_detectado": "observed color name",
+  "color_hex": "#representative hex code",
+  "turbidez": "Clear, Slightly cloudy, Cloudy or Opaque",
+  "espuma": true or false,
+  "sedimento_visible": true or false,
+  "nivel_urgencia": "Normal, Observe, Consult soon or Emergency",
+  "urgencia_color": "#52C97A for normal, #FF9800 for observe, #F44336 for consult, #8B0000 for emergency",
+  "alerta_veterinario": true if urgency is NOT Normal,
+  "significado_clinico": "clear explanation of what this urine color indicates",
+  "posibles_condiciones": ["condition 1", "condition 2", "condition 3"],
+  "en_gatos": "specific manifestation and risks in cats",
+  "en_perros": "specific manifestation and risks in dogs",
+  "recomendacion_inmediata": "what the owner should do RIGHT NOW",
+  "cuando_ir_veterinario": "specific criteria for consulting the vet",
+  "consejo_hidratacion": "water and diet advice based on detected color",
+  "mensaje_urgencia": "direct and clear message for the owner"
+}
+
+If the image does not clearly show pet urine: {"orina_detectada": false, "mensaje": "No urine detected in the image. Make sure to photograph it on a clear surface or litter tray."}
+Respond ONLY the JSON."""
+
+# ════════════════════════════════════════════════════════════════
 #  PROMPT MAULLIDO
 # ════════════════════════════════════════════════════════════════
 PROMPT_MAULLIDO = """Eres el Dr. MeowScan, veterinario etólogo felino con 30 años de experiencia especializado en comunicación y comportamiento de gatos.
@@ -1227,6 +1312,71 @@ class MotorGroq:
             "posibles_causas":      resultado.get("posibles_condiciones", []),
         }
 
+    # ── Analizar orina ───────────────────────────────────────
+    def analizar_orina_con_groq(self, img_bgr: np.ndarray, lang: str = "es") -> Dict[str, Any]:
+        img_b64 = self._img_to_b64(img_bgr)
+        try:
+            prompt = PROMPT_ORINA_EN if lang == "en" else PROMPT_ORINA_ES
+            return self._llamar_gemini(img_b64, prompt, max_tokens=1500)
+        except Exception as e:
+            print(f"❌ Orina error: {e}")
+            return {"orina_detectada": False}
+
+    def analizar_frame_orina(self, img_bytes: bytes, lang: str = "es") -> Dict[str, Any]:
+        arr = np.frombuffer(img_bytes, np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        if img is None:
+            raise ValueError("No se pudo decodificar la imagen")
+        resultado = self.analizar_orina_con_groq(img, lang=lang)
+        if not resultado.get("orina_detectada", False):
+            return {
+                "orina_detectada": False,
+                "timestamp": time.time(),
+                "mensaje": resultado.get("mensaje", "No se detectó orina. Asegúrate de fotografiar sobre superficie clara.")
+            }
+        # Annotate image with urgency level
+        urgencia = resultado.get("nivel_urgencia", "Normal")
+        color_map = {
+            "Normal": (82, 201, 122),
+            "Observar": (0, 165, 255),
+            "Consult soon": (0, 100, 244),
+            "Observe": (0, 165, 255),
+            "Consulta pronto": (0, 100, 244),
+            "Emergency": (0, 0, 139),
+            "Emergencia": (0, 0, 139),
+        }
+        color_cv = color_map.get(urgencia, (82, 201, 122))
+        img_an = img.copy()
+        color_nombre = resultado.get("color_detectado", "-")
+        cv2.putText(img_an, f"Orina: {color_nombre}",
+                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color_cv, 2)
+        cv2.putText(img_an, f"Urgencia: {urgencia}",
+                    (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_cv, 2)
+        _, buf = cv2.imencode(".jpg", img_an, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        img_b64 = base64.b64encode(buf.tobytes()).decode()
+        return {
+            "orina_detectada":          True,
+            "timestamp":                time.time(),
+            "imagen_anotada":           img_b64,
+            "color_detectado":          resultado.get("color_detectado", "-"),
+            "color_hex":                resultado.get("color_hex", "#FFD700"),
+            "turbidez":                 resultado.get("turbidez", "-"),
+            "espuma":                   resultado.get("espuma", False),
+            "sedimento_visible":        resultado.get("sedimento_visible", False),
+            "nivel_urgencia":           urgencia,
+            "urgencia_color":           resultado.get("urgencia_color", "#52C97A"),
+            "alerta_veterinario":       resultado.get("alerta_veterinario", False),
+            "significado_clinico":      resultado.get("significado_clinico", "-"),
+            "posibles_condiciones":     resultado.get("posibles_condiciones", []),
+            "en_gatos":                 resultado.get("en_gatos", "-"),
+            "en_perros":                resultado.get("en_perros", "-"),
+            "recomendacion_inmediata":  resultado.get("recomendacion_inmediata", "-"),
+            "cuando_ir_veterinario":    resultado.get("cuando_ir_veterinario", "-"),
+            "consejo_hidratacion":      resultado.get("consejo_hidratacion", "-"),
+            "mensaje_urgencia":         resultado.get("mensaje_urgencia", "-"),
+            "tipo":                     "orina",
+        }
+
     # ── Analizar maullido ────────────────────────────────────
     def analizar_audio_maullido(self, descripcion: str, lang: str = "es") -> Dict[str, Any]:
         """Analiza descripción de sonidos felinos con IA."""
@@ -1652,6 +1802,22 @@ async def analizar_encias(file: UploadFile = File(...), lang: str = Form("es")):
         raise
     except Exception as e:
         print(f"❌ analizar_encias error: {e}")
+        raise _client_error()
+    return JSONResponse(content=resultado)
+
+
+@app.post("/analizar_orina")
+async def analizar_orina(file: UploadFile = File(...), lang: str = Form("es")):
+    """Analiza el color de la orina de la mascota con IA veterinaria"""
+    if motor is None:
+        raise HTTPException(status_code=503, detail="Motor no inicializado")
+    try:
+        contenido = await _read_upload_bytes(file, MAX_IMAGE_BYTES, "Image")
+        resultado = motor.analizar_frame_orina(contenido, lang=lang)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ analizar_orina error: {e}")
         raise _client_error()
     return JSONResponse(content=resultado)
 
